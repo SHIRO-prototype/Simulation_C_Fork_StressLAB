@@ -96,5 +96,84 @@ def monte_carlo(seed, n_runs, miss_distance, t_end, dt, output_dir, verbose):
             click.echo(f"  Median: {dcw.median():.1f}s")
 
 
+@main.command()
+@click.option("--input", "input_path", required=True,
+              type=click.Path(exists=True), help="Path to run summary JSON")
+@click.option("--format", "fmt", default="json",
+              type=click.Choice(["json", "csv", "latex"]),
+              help="Output format")
+@click.option("--output-dir", default="outputs/reports",
+              type=click.Path(), help="Output directory")
+def report(input_path, fmt, output_dir):
+    """Generate a formatted report from a run summary."""
+    import json as _json
+
+    from stresslab.reporting.compare import load_summary_json
+    from stresslab.reporting.benchmark_report import generate_benchmark_report
+    from stresslab.reporting.exporters import (
+        export_json, export_csv, export_latex_table, report_to_latex_rows,
+    )
+    from stresslab.metrics_contract import MetricsSummary
+
+    output = Path(output_dir)
+
+    raw = load_summary_json(Path(input_path))
+
+    # Try to reconstruct a MetricsSummary if all fields are present
+    try:
+        summary = MetricsSummary(**{
+            k: raw[k] for k in MetricsSummary.__dataclass_fields__
+        })
+        bench_report = generate_benchmark_report(summary)
+    except (KeyError, TypeError):
+        # Fall back to treating the raw dict as the report
+        bench_report = raw
+
+    if fmt == "json":
+        out = export_json(bench_report, output / "report.json")
+    elif fmt == "csv":
+        out = export_csv(bench_report, output / "report.csv")
+    elif fmt == "latex":
+        rows = report_to_latex_rows(bench_report)
+        out = export_latex_table(rows, output / "report.tex")
+    else:
+        click.echo(f"Unknown format: {fmt}", err=True)
+        return
+
+    click.echo(f"Report written to: {out}")
+
+
+@main.command()
+@click.option("--run-a", required=True, type=click.Path(exists=True),
+              help="Path to first run summary JSON")
+@click.option("--run-b", required=True, type=click.Path(exists=True),
+              help="Path to second run summary JSON")
+@click.option("--format", "fmt", default="json",
+              type=click.Choice(["json", "csv"]),
+              help="Output format")
+@click.option("--output-dir", default="outputs/reports",
+              type=click.Path(), help="Output directory")
+def compare(run_a, run_b, fmt, output_dir):
+    """Compare two simulation run summaries."""
+    from stresslab.reporting.compare import (
+        compare_from_files, comparison_to_dataframe,
+    )
+    from stresslab.reporting.exporters import export_json, export_csv
+
+    output = Path(output_dir)
+    comparison = compare_from_files(Path(run_a), Path(run_b))
+
+    if fmt == "json":
+        out = export_json(comparison, output / "comparison.json")
+    elif fmt == "csv":
+        df = comparison_to_dataframe(comparison)
+        out = export_csv(df, output / "comparison.csv")
+    else:
+        click.echo(f"Unknown format: {fmt}", err=True)
+        return
+
+    click.echo(f"Comparison written to: {out}")
+
+
 if __name__ == "__main__":
     main()
