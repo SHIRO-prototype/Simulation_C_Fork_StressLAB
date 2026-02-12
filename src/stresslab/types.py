@@ -279,19 +279,71 @@ class SimulationConfig:
     seed: int = 42
 
     def run_id(self) -> str:
-        """SHA-256 hash of config + seed."""
-        blob = json.dumps(self._serializable(), sort_keys=True)
+        """SHA-256 hash of the fully-resolved config + code version.
+
+        Every field that can affect simulation output is included.
+        Changing *any* parameter produces a different run_id, ensuring
+        that cached results are never confused across configurations.
+        """
+        from stresslab import __version__
+        blob = json.dumps(self._serializable(__version__), sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
-    def _serializable(self) -> dict:
-        """Convert to JSON-safe dict for hashing."""
+    def _serializable(self, code_version: str = "") -> dict:
+        """Convert the full config to a JSON-safe dict for hashing.
+
+        Args:
+            code_version: stresslab package version tag (included in hash).
+        """
         return {
+            "code_version": code_version,
+            # Initial states & covariances
             "state_obj1": self.state_obj1.tolist(),
             "state_obj2": self.state_obj2.tolist(),
+            "cov_obj1": self.cov_obj1.tolist(),
+            "cov_obj2": self.cov_obj2.tolist(),
+            # Dynamics
             "dynamics_model": self.dynamics_model.value,
+            "process_noise": {
+                "sigma_radial": self.process_noise.sigma_radial,
+                "sigma_tangential": self.process_noise.sigma_tangential,
+                "sigma_normal": self.process_noise.sigma_normal,
+                "scale": self.process_noise.scale,
+            },
+            # Measurement
+            "measurement": {
+                "update_interval": self.measurement.update_interval,
+                "noise_sigma_pos": self.measurement.noise_sigma_pos,
+                "outage_windows": self.measurement.outage_windows,
+            },
+            # Maneuver
+            "maneuver": {
+                "enabled": self.maneuver.enabled,
+                "delta_v_sigma": self.maneuver.delta_v_sigma,
+                "execution_time": self.maneuver.execution_time,
+            },
+            # Decision models
+            "threshold_v1": {
+                "pc_threshold": self.threshold_v1.pc_threshold,
+                "miss_distance_threshold": self.threshold_v1.miss_distance_threshold,
+                "time_to_tca_gate": self.threshold_v1.time_to_tca_gate,
+            },
+            "integrity_v1": {
+                "weights": self.integrity_v1.weights.tolist(),
+                "threshold_monitor_to_watch": self.integrity_v1.threshold_monitor_to_watch,
+                "threshold_watch_to_warning": self.integrity_v1.threshold_watch_to_warning,
+                "threshold_warning_to_critical": self.integrity_v1.threshold_warning_to_critical,
+                "pc_ref": self.integrity_v1.pc_ref,
+                "cov_norm_ref": self.integrity_v1.cov_norm_ref,
+                "growth_rate_ref": self.integrity_v1.growth_rate_ref,
+                "staleness_ref": self.integrity_v1.staleness_ref,
+            },
+            # Timeline
             "t_start": self.t_start,
             "t_end": self.t_end,
             "dt": self.dt,
-            "seed": self.seed,
+            # Risk
             "combined_hard_body_radius": self.combined_hard_body_radius,
+            # Reproducibility
+            "seed": self.seed,
         }
