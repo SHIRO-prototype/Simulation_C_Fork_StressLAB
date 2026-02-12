@@ -188,6 +188,11 @@ class TestJSONSchemaVersion:
             "outage_sensitivity_score",
             "max_pc_degraded", "max_pc_reference", "max_cov_trace",
             "max_staleness", "total_timesteps", "dynamics_model",
+            "decision_instability_index", "decision_transitions_per_hour",
+            "decision_entropy",
+            "mean_pc_drift", "max_pc_drift",
+            "staleness_pc_correlation",
+            "mean_freshness", "min_freshness",
         }
         assert required_keys.issubset(set(data.keys()))
 

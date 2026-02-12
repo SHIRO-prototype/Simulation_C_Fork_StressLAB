@@ -26,6 +26,12 @@ from stresslab.types import (
 from stresslab.metrics_contract import (
     METRICS_CONTRACT_VERSION,
     compression_window,
+    freshness_score as compute_freshness,
+    pc_drift as compute_pc_drift,
+    staleness_pc_correlation,
+    decision_transitions_per_hour,
+    decision_entropy,
+    decision_instability_index,
     is_true_danger,
     outage_sensitivity_score as compute_outage_sensitivity,
     MetricsSummary,
@@ -33,7 +39,7 @@ from stresslab.metrics_contract import (
 
 # Schema version tracks the structure of output artifacts (columns, keys).
 # Bump this when the output schema changes (new columns, renamed keys, etc.)
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 
 
 class LoggingEngine:
@@ -44,6 +50,10 @@ class LoggingEngine:
 
     def record(self, step: TimeStep) -> None:
         """Record one timestep."""
+        # Compute per-timestep Phase 2 metrics via the contract
+        _freshness = compute_freshness(step.measurement_obj1.time_since_last_update)
+        _pc_drift = compute_pc_drift(step.risk.pc_degraded, step.risk.pc_reference)
+
         self._records.append({
             "timestamp": step.t,
             "rel_pos_x": step.propagation.rel_position[0],
@@ -73,6 +83,8 @@ class LoggingEngine:
             "measurement_applied_obj2": step.measurement_obj2.applied,
             "staleness_obj1": step.measurement_obj1.time_since_last_update,
             "staleness_obj2": step.measurement_obj2.time_since_last_update,
+            "freshness_score": _freshness,
+            "pc_drift": _pc_drift,
         })
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -131,6 +143,28 @@ class LoggingEngine:
         # Outage sensitivity (via contract)
         max_stale = float(df["staleness_obj1"].max())
 
+        # --- Phase 2 elevated metrics ---
+        state_seq = df["integrity_v1_state"].tolist()
+        dt = float(config.dt)
+
+        # Decision instability metrics (via contract)
+        instability = decision_instability_index(state_seq, dt)
+        trans_per_hour = decision_transitions_per_hour(state_seq, dt)
+        entropy = decision_entropy(state_seq)
+
+        # Pc drift (via contract, from per-timestep column)
+        _mean_pc_drift = float(df["pc_drift"].mean()) if len(df) > 0 else 0.0
+        _max_pc_drift = float(df["pc_drift"].max()) if len(df) > 0 else 0.0
+
+        # Staleness-Pc correlation (via contract)
+        _staleness_pc_corr = staleness_pc_correlation(
+            df["staleness_obj1"].tolist(), df["pc_drift"].tolist(),
+        )
+
+        # Freshness (via contract, from per-timestep column)
+        _mean_freshness = float(df["freshness_score"].mean()) if len(df) > 0 else 0.0
+        _min_freshness = float(df["freshness_score"].min()) if len(df) > 0 else 0.0
+
         return MetricsSummary(
             contract_version=METRICS_CONTRACT_VERSION,
             threshold_v1_trigger_time=threshold_v1_trigger_time,
@@ -143,6 +177,14 @@ class LoggingEngine:
             max_pc_reference=float(df["pc_reference"].max()),
             max_cov_trace=float(df["cov_trace_obj1"].max()),
             max_staleness=max_stale,
+            decision_instability_index=instability,
+            decision_transitions_per_hour=trans_per_hour,
+            decision_entropy=entropy,
+            mean_pc_drift=_mean_pc_drift,
+            max_pc_drift=_max_pc_drift,
+            staleness_pc_correlation=_staleness_pc_corr,
+            mean_freshness=_mean_freshness,
+            min_freshness=_min_freshness,
             total_timesteps=len(df),
         )
 
@@ -177,6 +219,14 @@ class LoggingEngine:
             "max_pc_reference": metrics.max_pc_reference,
             "max_cov_trace": metrics.max_cov_trace,
             "max_staleness": metrics.max_staleness,
+            "decision_instability_index": metrics.decision_instability_index,
+            "decision_transitions_per_hour": metrics.decision_transitions_per_hour,
+            "decision_entropy": metrics.decision_entropy,
+            "mean_pc_drift": metrics.mean_pc_drift,
+            "max_pc_drift": metrics.max_pc_drift,
+            "staleness_pc_correlation": metrics.staleness_pc_correlation,
+            "mean_freshness": metrics.mean_freshness,
+            "min_freshness": metrics.min_freshness,
             "total_timesteps": metrics.total_timesteps,
             "dynamics_model": config.dynamics_model.value,
         }
