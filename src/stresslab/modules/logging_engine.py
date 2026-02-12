@@ -13,7 +13,10 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
+from stresslab import __version__ as STRESSLAB_VERSION
 from stresslab.types import (
     TimeStep,
     AlertState,
@@ -27,6 +30,10 @@ from stresslab.metrics_contract import (
     outage_sensitivity_score as compute_outage_sensitivity,
     MetricsSummary,
 )
+
+# Schema version tracks the structure of output artifacts (columns, keys).
+# Bump this when the output schema changes (new columns, renamed keys, etc.)
+SCHEMA_VERSION = "1.0.0"
 
 
 class LoggingEngine:
@@ -73,11 +80,23 @@ class LoggingEngine:
         return pd.DataFrame(self._records)
 
     def write_timeseries(self, output_dir: Path, run_id: str) -> Path:
-        """Write time-series data to parquet."""
+        """Write time-series data to parquet with embedded schema metadata."""
         output_dir.mkdir(parents=True, exist_ok=True)
         df = self.to_dataframe()
         path = output_dir / f"timeseries_{run_id}.parquet"
-        df.to_parquet(path, index=False)
+
+        # Convert to pyarrow table so we can inject file-level metadata
+        table = pa.Table.from_pandas(df, preserve_index=False)
+        existing_meta = table.schema.metadata or {}
+        extra = {
+            b"schema_version": SCHEMA_VERSION.encode(),
+            b"metrics_contract_version": METRICS_CONTRACT_VERSION.encode(),
+            b"stresslab_version": STRESSLAB_VERSION.encode(),
+            b"run_id": run_id.encode(),
+        }
+        merged = {**existing_meta, **extra}
+        table = table.replace_schema_metadata(merged)
+        pq.write_table(table, str(path))
         return path
 
     def compute_summary(
@@ -145,7 +164,9 @@ class LoggingEngine:
         summary = {
             "run_id": run_id,
             "seed": config.seed,
+            "schema_version": SCHEMA_VERSION,
             "metrics_contract_version": metrics.contract_version,
+            "stresslab_version": STRESSLAB_VERSION,
             "threshold_v1_trigger_time": metrics.threshold_v1_trigger_time,
             "integrity_v1_trigger_time": metrics.integrity_v1_trigger_time,
             "decision_compression_window": metrics.decision_compression_window,
