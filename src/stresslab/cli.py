@@ -796,8 +796,12 @@ def doctor():
     ]
     for import_name, pkg_name in deps:
         try:
-            mod = __import__(import_name)
-            ver = getattr(mod, "__version__", "unknown")
+            __import__(import_name)
+            try:
+                from importlib.metadata import version as _pkg_version
+                ver = _pkg_version(pkg_name)
+            except Exception:
+                ver = "unknown"
             _ok(f"{pkg_name} ({ver})")
         except ImportError:
             _fail(f"{pkg_name} not found")
@@ -809,8 +813,12 @@ def doctor():
     ]
     for import_name, pkg_name, purpose in opt_deps:
         try:
-            mod = __import__(import_name)
-            ver = getattr(mod, "__version__", "unknown")
+            __import__(import_name)
+            try:
+                from importlib.metadata import version as _pkg_version
+                ver = _pkg_version(pkg_name)
+            except Exception:
+                ver = "unknown"
             _ok(f"{pkg_name} ({ver}) - {purpose}")
         except ImportError:
             _warn(f"{pkg_name} not installed - {purpose} unavailable")

@@ -351,7 +351,7 @@ def plot_compression_window_distribution(dcw_vals, output_path, title=None):
     ax1.legend()
 
     # Right: box plot + percentile annotations
-    bp = ax2.boxplot(arr_hours, vert=True, patch_artist=True,
+    bp = ax2.boxplot(arr_hours, orientation="vertical", patch_artist=True,
                      boxprops=dict(facecolor="#BBDEFB", edgecolor="black"),
                      medianprops=dict(color="#F44336", linewidth=2))
     ax2.set_ylabel("DCW (hours)")
