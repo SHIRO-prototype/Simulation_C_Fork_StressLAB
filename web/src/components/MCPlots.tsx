@@ -85,10 +85,10 @@ export default function MCPlots({ summary }: MCPlotsProps) {
             },
           ]}
           layout={{
-            title: "Decision Compression Window Distribution",
+            title: { text: "Decision Compression Window Distribution" },
             height: 350,
-            xaxis: { title: "Decision Compression Window" },
-            yaxis: { title: "Count" },
+            xaxis: { title: { text: "Decision Compression Window" } },
+            yaxis: { title: { text: "Count" } },
             margin: { t: 40, b: 60, l: 60, r: 20 },
           }}
           useResizeHandler
@@ -111,10 +111,10 @@ export default function MCPlots({ summary }: MCPlotsProps) {
             },
           ]}
           layout={{
-            title: "False-Safe Rate Distribution",
+            title: { text: "False-Safe Rate Distribution" },
             height: 350,
-            xaxis: { title: "False-Safe Rate" },
-            yaxis: { title: "Count" },
+            xaxis: { title: { text: "False-Safe Rate" } },
+            yaxis: { title: { text: "Count" } },
             margin: { t: 40, b: 60, l: 60, r: 20 },
           }}
           useResizeHandler

@@ -36,10 +36,10 @@ export default function SweepPlots({ summary }: SweepPlotsProps) {
           },
         ]}
         layout={{
-          title: "Outage Duration vs DCW Shift",
+          title: { text: "Outage Duration vs DCW Shift" },
           height: 350,
-          xaxis: { title: "Param Value" },
-          yaxis: { title: "Decision Compression Window" },
+          xaxis: { title: { text: "Param Value" } },
+          yaxis: { title: { text: "Decision Compression Window" } },
           margin: { t: 40, b: 60, l: 70, r: 20 },
         }}
         useResizeHandler
@@ -59,10 +59,10 @@ export default function SweepPlots({ summary }: SweepPlotsProps) {
           },
         ]}
         layout={{
-          title: "Outage Duration vs False-Safe Rate",
+          title: { text: "Outage Duration vs False-Safe Rate" },
           height: 350,
-          xaxis: { title: "Param Value" },
-          yaxis: { title: "False-Safe Rate" },
+          xaxis: { title: { text: "Param Value" } },
+          yaxis: { title: { text: "False-Safe Rate" } },
           margin: { t: 40, b: 60, l: 70, r: 20 },
         }}
         useResizeHandler

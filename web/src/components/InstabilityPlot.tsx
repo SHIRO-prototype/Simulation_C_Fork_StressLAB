@@ -52,13 +52,13 @@ export default function InstabilityPlot({
         },
       ]}
       layout={{
-        title: "Decision State Timeline",
+        title: { text: "Decision State Timeline" },
         height: 300,
         xaxis: {
-          title: "Time (s)",
+          title: { text: "Time (s)" },
         },
         yaxis: {
-          title: "State",
+          title: { text: "State" },
           dtick: 1,
         },
         legend: {

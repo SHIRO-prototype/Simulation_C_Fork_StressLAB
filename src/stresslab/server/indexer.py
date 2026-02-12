@@ -139,6 +139,9 @@ class WorkspaceIndexer:
         if not root.is_dir():
             return
 
+        # Check this directory itself for sweep/MC artifacts
+        self._try_index_directory_artifacts(root)
+
         # Skip hidden directories and __pycache__
         for entry in sorted(root.iterdir()):
             if entry.name.startswith(".") or entry.name == "__pycache__":
@@ -149,18 +152,21 @@ class WorkspaceIndexer:
             if entry.is_file():
                 self._try_index_file(entry)
             elif entry.is_dir():
-                # Check for sweep or MC first (directory-level)
-                sweep_json = entry / "sweep_summary.json"
-                mc_csv = entry / "monte_carlo_summary.csv"
-                mc_stats = entry / "monte_carlo_stats.json"
-
-                if sweep_json.exists():
-                    self._index_sweep(entry, sweep_json)
-                elif mc_csv.exists() or mc_stats.exists():
-                    self._index_mc_batch(entry, mc_stats if mc_stats.exists() else mc_csv)
-
-                # Always recurse to find individual run summaries
+                # Always recurse to find individual run summaries and nested artifacts
                 self._scan_directory(entry)
+
+    def _try_index_directory_artifacts(self, directory: Path) -> None:
+        """Check a directory for sweep and MC artifacts at this level."""
+        sweep_json = directory / "sweep_summary.json"
+        mc_csv = directory / "monte_carlo_summary.csv"
+        mc_stats = directory / "monte_carlo_stats.json"
+
+        if sweep_json.exists():
+            self._index_sweep(directory, sweep_json)
+        if mc_csv.exists() or mc_stats.exists():
+            self._index_mc_batch(
+                directory, mc_stats if mc_stats.exists() else mc_csv
+            )
 
     def _try_index_file(self, path: Path) -> None:
         """Index a single file if it's a run summary."""

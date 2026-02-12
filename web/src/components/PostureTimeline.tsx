@@ -64,18 +64,18 @@ export default function PostureTimeline({
         },
       ]}
       layout={{
-        title: "Posture Timeline Overlay",
+        title: { text: "Posture Timeline Overlay" },
         height: 400,
         xaxis: {
-          title: "Time (s)",
+          title: { text: "Time (s)" },
         },
         yaxis: {
-          title: "Pc (log scale)",
+          title: { text: "Pc (log scale)" },
           type: "log",
           side: "left",
         },
         yaxis2: {
-          title: "Staleness",
+          title: { text: "Staleness" },
           overlaying: "y",
           side: "right",
         },

@@ -36,7 +36,7 @@ export default function PcDriftPlot({ columns, rows }: PcDriftPlotProps) {
             color: timestamp,
             colorscale: "Viridis",
             colorbar: {
-              title: "Time (s)",
+              title: { text: "Time (s)" },
             },
             size: 5,
           },
@@ -44,13 +44,13 @@ export default function PcDriftPlot({ columns, rows }: PcDriftPlotProps) {
         },
       ]}
       layout={{
-        title: "Pc Drift vs Staleness",
+        title: { text: "Pc Drift vs Staleness" },
         height: 400,
         xaxis: {
-          title: "Staleness (obj1)",
+          title: { text: "Staleness (obj1)" },
         },
         yaxis: {
-          title: "Pc Drift",
+          title: { text: "Pc Drift" },
         },
         margin: { t: 40, b: 60, l: 60, r: 60 },
       }}
