@@ -1,0 +1,41 @@
+# Default StressLAB scenario configuration
+# Edit this file or pass parameters via CLI
+
+seed: 42
+miss_distance_km: 0.5
+dynamics_model: two_body_plus_J2
+
+timeline:
+  t_start: 0.0
+  t_end: 259200.0   # 3 days
+  dt: 60.0           # 1 minute
+
+measurement:
+  update_interval: 3600.0    # 1 hour
+  noise_sigma_pos: 0.01      # km
+  outage_windows:
+    - start: 77760.0          # 30% of 3 days
+      end: 129600.0           # 50% of 3 days
+
+process_noise:
+  sigma_radial: 1.0e-9       # km/s^2
+  sigma_tangential: 1.0e-9
+  sigma_normal: 1.0e-9
+  scale: 1.0
+
+risk:
+  combined_hard_body_radius: 0.02  # km (20 m)
+
+baseline_decision:
+  pc_threshold: 1.0e-4
+  time_to_tca_gate: 86400.0  # 1 day
+
+shiro_decision:
+  weights: [0.4, 0.2, 0.2, 0.2]
+  threshold_monitor_to_watch: 0.25
+  threshold_watch_to_warning: 0.50
+  threshold_warning_to_critical: 0.75
+  pc_ref: 1.0e-4
+  cov_norm_ref: 100.0
+  growth_rate_ref: 1.0
+  staleness_ref: 86400.0

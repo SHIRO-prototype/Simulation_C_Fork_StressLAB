@@ -1,0 +1,259 @@
+version: "1.0.0"
+mission_statement: >
+  A conjunction decision stress-testing platform that quantifies how
+  tracking degradation and uncertainty growth affect risk classification
+  and escalation timing.
+
+coordinate_frame: ECI
+state_vector: [x, y, z, vx, vy, vz]
+units:
+  position: km
+  velocity: km/s
+  time: s
+  angles: rad
+
+scope:
+  in_scope:
+    - orbital propagation of two objects
+    - covariance propagation and growth modeling
+    - configurable measurement cadence and outage injection
+    - process noise tuning
+    - optional maneuver uncertainty injection
+    - collision probability estimation
+    - dual decision logic comparison (baseline vs SHIRO model)
+    - reproducible experiment logging
+    - Monte Carlo batch analysis
+  out_of_scope:
+    - maneuver optimization
+    - CDM ingestion/visualization
+    - operational flight system integration
+    - real-time command execution
+
+architecture:
+  modules:
+    simulation_runner:
+      description: >
+        Top-level orchestrator that manages the time-stepping loop,
+        calls modules in sequence, and coordinates data flow.
+      call_order:
+        - scenario_generator
+        - propagation_engine
+        - covariance_engine
+        - measurement_model
+        - geometry_metrics
+        - risk_model
+        - decision_layer
+        - logging_engine
+
+    scenario_generator:
+      description: >
+        Generates reproducible conjunction scenarios with deterministic seeds.
+      inputs:
+        - initial_state_object_1
+        - initial_state_object_2
+        - initial_covariance_object_1
+        - initial_covariance_object_2
+        - dynamics_model_config
+        - process_noise_config
+        - measurement_schedule
+        - maneuver_policy_optional
+        - simulation_timeline
+        - random_seed
+      outputs:
+        - scenario_config.json
+
+    propagation_engine:
+      description: >
+        Physically grounded orbital propagation engine.
+      supported_models:
+        - two_body
+        - two_body_plus_J2
+        - drag_optional
+      outputs_per_timestep:
+        - position_object_1
+        - velocity_object_1
+        - position_object_2
+        - velocity_object_2
+        - relative_position
+        - relative_velocity
+        - state_transition_matrix_object_1
+        - state_transition_matrix_object_2
+        - estimated_time_to_closest_approach
+
+    covariance_engine:
+      description: >
+        Propagates state uncertainty using the STM from propagation_engine
+        and applies Kalman measurement updates.
+      process_noise:
+        frame: RTN
+        type: acceleration_noise
+        structure: diagonal_3x3_mapped_to_6x6
+        units: km^2/s^4
+      observation_model:
+        type: full_state_position
+        H_matrix: "[I_3x3 | 0_3x3]"
+        measurement_noise_R: diagonal_3x3_position_km2
+      features:
+        - linearized_covariance_propagation_via_STM
+        - configurable_process_noise_Q
+        - measurement_noise_R
+        - measurement_update_kalman
+        - outage_injection_window
+        - maneuver_uncertainty_injection_optional
+      outputs_per_timestep:
+        - covariance_matrix
+        - covariance_norm_trace
+        - covariance_norm_frobenius
+        - max_eigenvalue
+        - covariance_growth_rate
+
+    measurement_model:
+      description: >
+        Controls observation cadence and staleness.
+      configurable_parameters:
+        - update_interval_seconds
+        - outage_windows
+        - noise_model
+      outputs:
+        - measurement_applied_boolean
+        - time_since_last_update
+
+    geometry_metrics:
+      description: >
+        Computes relative motion encounter geometry using the
+        conjunction plane normal to relative velocity at TCA
+        (Alfriend B-plane convention).
+      frame_convention: "Alfriend B-plane: xi along relative velocity, eta/zeta span B-plane"
+      outputs:
+        - miss_distance_estimate
+        - relative_velocity_at_TCA
+        - time_to_TCA
+        - encounter_plane_basis_vectors
+
+    risk_model:
+      description: >
+        Computes collision probability under Gaussian assumption
+        using Foster short-encounter 2D Pc formulation.
+      method:
+        type: "Foster short-encounter 2D Gaussian Pc"
+        reference: "Foster 1992, NASA"
+        parameters:
+          - combined_hard_body_radius
+      outputs:
+        - collision_probability_baseline
+        - collision_probability_degraded
+        - risk_ratio
+      notes: >
+        collision_probability_degraded is the Pc computed from the
+        covariance that includes outage and degradation effects.
+
+    decision_layer:
+      description: >
+        Evaluates posture models side-by-side.
+      models:
+        baseline_threshold_model:
+          trigger_conditions:
+            - Pc_threshold
+            - miss_distance_threshold_optional
+            - time_to_TCA_gate
+          outputs:
+            - trigger_time
+            - alert_state
+        shiro_confidence_integrity_model:
+          inputs:
+            - collision_probability
+            - covariance_norm
+            - covariance_growth_rate
+            - time_since_last_update
+          transition_function:
+            type: weighted_score_threshold
+            score: >
+              w1*normalized_Pc + w2*normalized_cov_norm +
+              w3*normalized_growth_rate + w4*normalized_staleness
+            weights: [w1, w2, w3, w4]
+            thresholds:
+              monitor_to_watch: configurable
+              watch_to_warning: configurable
+              warning_to_critical: configurable
+          states:
+            - Monitor
+            - Watch
+            - Warning
+            - Critical
+          outputs:
+            - trigger_time
+            - escalation_transitions
+            - alert_state
+
+    logging_engine:
+      description: >
+        Records time-series data and experiment summaries.
+      outputs:
+        time_series_log:
+          format: "parquet"
+          fields:
+            - timestamp
+            - relative_position
+            - relative_velocity
+            - covariance_norm_trace
+            - covariance_growth_rate
+            - collision_probability
+            - baseline_alert_state
+            - shiro_alert_state
+        run_summary:
+          format: "json"
+          fields:
+            - baseline_trigger_time
+            - shiro_trigger_time
+            - decision_compression_window
+            - false_safe_rate
+            - false_alert_rate
+            - outage_sensitivity_score
+
+evaluation_metrics:
+  ground_truth_definition: "true_miss_distance < combined_hard_body_radius"
+  decision_compression_window: "baseline_trigger_time - shiro_trigger_time"
+  outage_sensitivity_gradient: "d(trigger_time) / d(outage_duration) via finite difference"
+  geometry:
+    - miss_distance
+    - relative_velocity
+    - time_to_TCA
+  uncertainty:
+    - covariance_trace
+    - covariance_frobenius
+    - max_eigenvalue
+    - envelope_growth_rate
+  decision_performance:
+    - trigger_timing_shift
+    - escalation_transition_sequence
+    - false_safe_rate
+    - false_alert_rate
+    - decision_compression_window
+    - outage_sensitivity_gradient
+
+monte_carlo:
+  enabled: true
+  initial_condition_sampling: "Gaussian from initial covariance"
+  batch_parameters:
+    - number_of_runs
+    - randomized_initial_conditions
+    - randomized_outage_patterns
+    - randomized_process_noise_scale
+  outputs:
+    - statistical_summary_csv
+    - distribution_plots
+    - comparative_baseline_vs_shiro_metrics
+
+reproducibility:
+  deterministic_seed_required: true
+  scenario_hashing: true
+  config_export: true
+  run_id_generation: "sha256(config + seed)"
+
+success_criteria:
+  - platform can demonstrate measurable trigger timing shift
+    under increasing outage duration
+  - platform can quantify difference between baseline and SHIRO model
+    in false-safe and false-alert rates
+  - results reproducible across identical seeds
+  - Monte Carlo statistics stable across batches
