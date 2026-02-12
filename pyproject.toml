@@ -20,9 +20,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+    "pydantic>=2.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "httpx>=0.24",
 ]
 
 [project.scripts]

@@ -958,6 +958,64 @@ def doctor():
 
 
 # ---------------------------------------------------------------------------
+# serve command (local web dashboard)
+# ---------------------------------------------------------------------------
+
+@main.command()
+@click.option("--workspace", default="outputs", type=click.Path(exists=True),
+              help="Root directory containing simulation artifacts")
+@click.option("--port", default=5179, type=int, help="Port to listen on")
+@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option("--open", "open_browser", is_flag=True, help="Open browser on start")
+@click.option("--dev", is_flag=True, help="Enable CORS for Vite dev server")
+def serve(workspace, port, host, open_browser, dev):
+    """Start the local web dashboard for browsing simulation results.
+
+    Launches a FastAPI server that serves the StressLAB dashboard UI
+    and provides a REST API for browsing runs, sweeps, and MC batches.
+
+    \b
+    Examples:
+      stresslab serve                       # Browse outputs/ on port 5179
+      stresslab serve --workspace ./my_runs # Browse a custom directory
+      stresslab serve --open                # Auto-open browser
+      stresslab serve --dev                 # Enable CORS for Vite dev server
+    """
+    try:
+        import uvicorn
+    except ImportError:
+        raise click.ClickException(
+            "Web dependencies not installed. Run: pip install stresslab[web]"
+        )
+
+    from stresslab.server.app import create_app
+
+    workspace_path = Path(workspace).resolve()
+    app = create_app(workspace=workspace_path, dev_mode=dev)
+
+    if open_browser:
+        import webbrowser
+        import threading
+
+        def _open():
+            import time
+            time.sleep(1.0)  # Give server a moment to start
+            webbrowser.open(f"http://{host}:{port}")
+
+        threading.Thread(target=_open, daemon=True).start()
+
+    click.echo(f"StressLAB Dashboard")
+    click.echo(f"  Version:   {__version__}")
+    click.echo(f"  Workspace: {workspace_path}")
+    click.echo(f"  URL:       http://{host}:{port}")
+    if dev:
+        click.echo(f"  Dev mode:  CORS enabled for localhost:5173/5174")
+    click.echo("")
+
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
