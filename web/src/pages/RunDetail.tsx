@@ -3,18 +3,33 @@ import { useParams, useNavigate } from "react-router-dom";
 import { fetchRunSummary, fetchRunTimeseries, runDownloadUrl } from "../lib/api";
 import type { TimeseriesResponse } from "../lib/types";
 import MetricCard from "../components/MetricCard";
-import PostureTimeline from "../components/PostureTimeline";
+import PcPanel from "../components/PcPanel";
+import StalenessPanel from "../components/StalenessPanel";
+import UncertaintyPanel from "../components/UncertaintyPanel";
+import StateBands from "../components/StateBands";
 import PcDriftPlot from "../components/PcDriftPlot";
 import InstabilityPlot from "../components/InstabilityPlot";
+import StoryPanel from "../components/StoryPanel";
+import CurrentPostureWidget from "../components/CurrentPostureWidget";
+import ConfidenceGauge from "../components/ConfidenceGauge";
 
 /* ------------------------------------------------------------------ */
 /*  Formatting helpers                                                 */
 /* ------------------------------------------------------------------ */
 
-/** Format a trigger-time value: number -> "Xs", null/undefined -> fallback. */
+/** Format seconds to hh:mm string. */
+function secToHM(s: number): string {
+  const h = Math.floor(Math.abs(s) / 3600);
+  const m = Math.floor((Math.abs(s) % 3600) / 60);
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
+/** Format a trigger-time value as T-hh:mm relative to TCA. */
 function fmtTrigger(v: unknown, fallback = "Not triggered"): string {
   if (v == null) return fallback;
-  if (typeof v === "number") return `${v}s`;
+  if (typeof v === "number") {
+    return `T-${secToHM(v)} (${v.toFixed(0)}s)`;
+  }
   return String(v);
 }
 
@@ -25,17 +40,27 @@ function fmtFixed(v: unknown, digits: number): string {
   return String(v);
 }
 
-/** Scientific-notation string, or "---". */
+/** Scientific-notation string with 3 significant figures, or "---". */
 function fmtSci(v: unknown): string {
   if (v == null) return "---";
-  if (typeof v === "number") return v.toExponential();
+  if (typeof v === "number") return v.toPrecision(3).replace(/e\+?/, "e");
   return String(v);
 }
 
-/** Format seconds: number -> "Xs", null -> "---". */
+/** Format seconds as dual display: Xs (hh:mm), or "---". */
 function fmtSeconds(v: unknown): string {
   if (v == null) return "---";
-  if (typeof v === "number") return `${v}s`;
+  if (typeof v === "number") return `${v.toFixed(0)}s (${secToHM(v)})`;
+  return String(v);
+}
+
+/** Format a compression window value. */
+function fmtCompression(v: unknown): string {
+  if (v == null) return "---";
+  if (typeof v === "number") {
+    const sign = v >= 0 ? "+" : "";
+    return `${sign}${v.toFixed(0)}s (${secToHM(v)})`;
+  }
   return String(v);
 }
 
@@ -123,6 +148,31 @@ export default function RunDetail() {
         </h1>
       </div>
 
+      {/* ---- Sanity badges ---- */}
+      {s.sanity && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "degradation_active", label: "Degradation Active", ok: (s.sanity as Record<string,boolean>).degradation_active },
+            { key: "pc_diverged", label: "Pc Diverged", ok: (s.sanity as Record<string,boolean>).pc_diverged },
+            { key: "staleness_ramped", label: "Staleness Ramped", ok: (s.sanity as Record<string,boolean>).staleness_ramped },
+          ].map((f) => (
+            <span
+              key={f.key}
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                f.ok
+                  ? "bg-green-100 text-green-800"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {f.ok ? "\u2713" : "\u2717"} {f.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* ---- Story narrative ---- */}
+      <StoryPanel story={s.story as { bullets: string[] } | null | undefined} />
+
       {/* ---- Metric cards ---- */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <MetricCard
@@ -137,7 +187,7 @@ export default function RunDetail() {
         />
         <MetricCard
           label="Decision Compression"
-          value={fmtTrigger(s.decision_compression_window, "---")}
+          value={fmtCompression(s.decision_compression_window)}
         />
         <MetricCard
           label="False Safe Rate"
@@ -162,6 +212,7 @@ export default function RunDetail() {
         <MetricCard
           label="Max Cov Trace"
           value={fmtSci(s.max_cov_trace)}
+          unit="km\u00B2"
         />
         <MetricCard
           label="Max Staleness"
@@ -174,6 +225,7 @@ export default function RunDetail() {
         <MetricCard
           label="Decision Entropy"
           value={fmtFixed(s.decision_entropy, 4)}
+          unit="nats"
         />
         <MetricCard
           label="Mean Pc Drift"
@@ -189,7 +241,7 @@ export default function RunDetail() {
         />
         <MetricCard
           label="Outage Sensitivity"
-          value={fmtFixed(s.outage_sensitivity_score, 3)}
+          value={fmtSeconds(s.outage_sensitivity_score)}
         />
         <MetricCard
           label="Mean Freshness"
@@ -233,10 +285,40 @@ export default function RunDetail() {
         </div>
       )}
 
+      {/* ---- Operator Decision Panel ---- */}
+      {timeseries && (
+        <div className="space-y-4">
+          <CurrentPostureWidget
+            columns={timeseries.columns}
+            rows={timeseries.rows}
+            summary={s}
+          />
+          <ConfidenceGauge
+            columns={timeseries.columns}
+            rows={timeseries.rows}
+          />
+        </div>
+      )}
+
       {/* ---- Charts ---- */}
       {timeseries && (
         <div className="space-y-6">
-          <PostureTimeline
+          <PcPanel
+            columns={timeseries.columns}
+            rows={timeseries.rows}
+            summary={s}
+          />
+          <StalenessPanel
+            columns={timeseries.columns}
+            rows={timeseries.rows}
+            summary={s}
+          />
+          <UncertaintyPanel
+            columns={timeseries.columns}
+            rows={timeseries.rows}
+            summary={s}
+          />
+          <StateBands
             columns={timeseries.columns}
             rows={timeseries.rows}
             summary={s}

@@ -188,6 +188,169 @@ class LoggingEngine:
             total_timesteps=len(df),
         )
 
+    @staticmethod
+    def _build_sanity(
+        config: SimulationConfig,
+        max_pc_drift: float,
+        max_staleness: float,
+    ) -> dict:
+        """Build degradation sanity flags from config and metrics."""
+        has_outages = len(config.measurement.outage_windows) > 0
+        return {
+            "degradation_active": has_outages,
+            "pc_diverged": max_pc_drift > 1e-6,
+            "staleness_ramped": max_staleness > config.measurement.update_interval,
+        }
+
+    @staticmethod
+    def _build_config_snapshot(config: SimulationConfig) -> dict:
+        """Extract key config parameters for the summary envelope."""
+        return {
+            "update_interval": config.measurement.update_interval,
+            "outage_windows": [
+                {"start": w["start"], "end": w["end"]}
+                for w in config.measurement.outage_windows
+            ],
+            "process_noise_scale": config.process_noise.scale,
+            "pc_threshold": config.threshold_v1.pc_threshold,
+            "t_start": config.t_start,
+            "t_end": config.t_end,
+            "dt": config.dt,
+            "combined_hard_body_radius": config.combined_hard_body_radius,
+        }
+
+    @staticmethod
+    def _build_story(
+        config: SimulationConfig,
+        metrics: MetricsSummary,
+        sanity: dict,
+    ) -> dict:
+        """Generate a human-readable narrative for the run.
+
+        Returns a dict with a ``bullets`` list of 6 narrative strings
+        covering the key aspects of the simulation outcome.
+        """
+        bullets: list[str] = []
+
+        # 1 — Tracking conditions
+        n_outages = len(config.measurement.outage_windows)
+        interval = config.measurement.update_interval
+        if n_outages > 0:
+            windows_desc = ", ".join(
+                f"{w['start']:.0f}-{w['end']:.0f}s"
+                for w in config.measurement.outage_windows
+            )
+            bullets.append(
+                f"Tracking operated at {interval}s cadence with "
+                f"{n_outages} outage window(s) ({windows_desc}), "
+                f"reaching a peak staleness of {metrics.max_staleness:.0f}s."
+            )
+        else:
+            bullets.append(
+                f"Tracking operated continuously at {interval}s cadence "
+                f"with no outages; peak staleness was {metrics.max_staleness:.0f}s."
+            )
+
+        # 2 — Uncertainty behaviour
+        if metrics.max_cov_trace > 1e-2:
+            unc_level = "significant"
+        elif metrics.max_cov_trace > 1e-4:
+            unc_level = "moderate"
+        else:
+            unc_level = "minimal"
+        bullets.append(
+            f"Position uncertainty showed {unc_level} growth "
+            f"(peak covariance trace {metrics.max_cov_trace:.3e} km^2)."
+        )
+
+        # 3 — Risk divergence
+        if sanity.get("pc_diverged"):
+            ratio_text = (
+                f"Pc diverged between reference ({metrics.max_pc_reference:.3e}) "
+                f"and degraded ({metrics.max_pc_degraded:.3e}) streams, "
+                f"with mean drift {metrics.mean_pc_drift:.3e} and "
+                f"staleness-Pc correlation {metrics.staleness_pc_correlation:.3f}."
+            )
+        else:
+            ratio_text = (
+                "Reference and degraded Pc streams remained closely aligned; "
+                "no meaningful risk divergence detected."
+            )
+        bullets.append(ratio_text)
+
+        # 4 — Decision timing
+        tv1 = metrics.threshold_v1_trigger_time
+        iv1 = metrics.integrity_v1_trigger_time
+        dcw = metrics.decision_compression_window
+        if tv1 is not None and iv1 is not None:
+            earlier = "Integrity V1" if iv1 > tv1 else "Threshold V1"
+            bullets.append(
+                f"Threshold V1 triggered at T-{tv1:.0f}s, "
+                f"Integrity V1 at T-{iv1:.0f}s "
+                f"(compression window {dcw:+.0f}s). "
+                f"{earlier} provided earlier warning."
+            )
+        elif tv1 is not None:
+            bullets.append(
+                f"Only Threshold V1 triggered (T-{tv1:.0f}s); "
+                "Integrity V1 never escalated."
+            )
+        elif iv1 is not None:
+            bullets.append(
+                f"Only Integrity V1 triggered (T-{iv1:.0f}s); "
+                "Threshold V1 never alerted."
+            )
+        else:
+            bullets.append(
+                "Neither decision model triggered during this scenario."
+            )
+
+        # 5 — Reliability
+        instab = metrics.decision_instability_index
+        trans = metrics.decision_transitions_per_hour
+        if instab < 0.01:
+            stability_desc = "very stable"
+        elif instab < 0.05:
+            stability_desc = "moderately stable"
+        else:
+            stability_desc = "unstable"
+        bullets.append(
+            f"Decision states were {stability_desc} "
+            f"(instability index {instab:.4f}, "
+            f"{trans:.2f} transitions/hr, "
+            f"entropy {metrics.decision_entropy:.4f} nats). "
+            f"False safe rate {metrics.false_safe_rate:.3f}, "
+            f"false alert rate {metrics.false_alert_rate:.3f}."
+        )
+
+        # 6 — Overall assessment
+        degradation_active = sanity.get("degradation_active", False)
+        pc_diverged = sanity.get("pc_diverged", False)
+        freshness = metrics.mean_freshness
+        if degradation_active and pc_diverged and freshness < 0.5:
+            assessment = (
+                "Tracking degradation materially impacted collision risk "
+                "classification and decision timing in this scenario."
+            )
+        elif degradation_active and pc_diverged:
+            assessment = (
+                "Degradation produced measurable risk divergence, "
+                "though freshness remained partially adequate."
+            )
+        elif degradation_active:
+            assessment = (
+                "Despite active degradation, risk divergence was negligible; "
+                "the scenario was resilient to the configured outages."
+            )
+        else:
+            assessment = (
+                "No degradation was configured; this run serves as a nominal "
+                "control case for comparison."
+            )
+        bullets.append(assessment)
+
+        return {"bullets": bullets}
+
     def write_summary(
         self,
         output_dir: Path,
@@ -202,6 +365,10 @@ class LoggingEngine:
         metrics = self.compute_summary(
             config, threshold_v1_trigger_time, integrity_v1_trigger_time,
         )
+
+        sanity = self._build_sanity(config, metrics.max_pc_drift, metrics.max_staleness)
+        config_snapshot = self._build_config_snapshot(config)
+        story = self._build_story(config, metrics, sanity)
 
         summary = {
             "run_id": run_id,
@@ -229,6 +396,9 @@ class LoggingEngine:
             "min_freshness": metrics.min_freshness,
             "total_timesteps": metrics.total_timesteps,
             "dynamics_model": config.dynamics_model.value,
+            "sanity": sanity,
+            "config": config_snapshot,
+            "story": story,
         }
 
         path = output_dir / f"summary_{run_id}.json"

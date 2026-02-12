@@ -193,6 +193,7 @@ class TestJSONSchemaVersion:
             "mean_pc_drift", "max_pc_drift",
             "staleness_pc_correlation",
             "mean_freshness", "min_freshness",
+            "sanity", "config", "story",
         }
         assert required_keys.issubset(set(data.keys()))
 

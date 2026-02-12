@@ -22,6 +22,30 @@ class HealthResponse(VersionMixin):
     status: str = "ok"
 
 
+class SanityFlags(BaseModel):
+    """Degradation sanity check flags."""
+    degradation_active: bool = False
+    pc_diverged: bool = False
+    staleness_ramped: bool = False
+
+
+class ConfigSnapshot(BaseModel):
+    """Key config parameters surfaced in summary."""
+    update_interval: Optional[float] = None
+    outage_windows: list[dict[str, float]] = []
+    process_noise_scale: Optional[float] = None
+    pc_threshold: Optional[float] = None
+    t_start: Optional[float] = None
+    t_end: Optional[float] = None
+    dt: Optional[float] = None
+    combined_hard_body_radius: Optional[float] = None
+
+
+class RunStory(BaseModel):
+    """Auto-generated narrative for a run."""
+    bullets: list[str] = []
+
+
 class RunIndex(BaseModel):
     """Summary entry for one simulation run."""
     run_id: str
@@ -48,6 +72,9 @@ class RunIndex(BaseModel):
     staleness_pc_correlation: Optional[float] = None
     mean_freshness: Optional[float] = None
     min_freshness: Optional[float] = None
+    sanity: Optional[SanityFlags] = None
+    config: Optional[ConfigSnapshot] = None
+    story: Optional[RunStory] = None
 
 
 class RunListResponse(VersionMixin):

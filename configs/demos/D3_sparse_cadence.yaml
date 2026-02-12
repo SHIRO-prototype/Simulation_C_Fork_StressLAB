@@ -1,0 +1,43 @@
+# Demo Pack D3: Sparse Cadence — slow decay from infrequent updates
+# 3-day scenario with 6-hour tracking cadence (no explicit outage).
+# Demonstrates how low update frequency alone degrades situational awareness.
+#
+# Usage:
+#   stresslab run --config configs/demos/D3_sparse_cadence.yaml --live
+
+seed: 42
+miss_distance_km: 0.5
+dynamics_model: two_body_plus_J2
+
+timeline:
+  t_start: 0.0
+  t_end: 259200.0   # 3 days
+  dt: 60.0           # 1 minute
+
+measurement:
+  update_interval: 21600.0   # 6 hours — sparse cadence
+  noise_sigma_pos: 0.01      # 10 m 1-sigma
+  outage_windows: []          # No explicit outages
+
+process_noise:
+  sigma_radial: 1.0e-9
+  sigma_tangential: 1.0e-9
+  sigma_normal: 1.0e-9
+  scale: 1.0
+
+risk:
+  combined_hard_body_radius: 0.02  # 20 m
+
+threshold_v1_decision:
+  pc_threshold: 1.0e-4
+  time_to_tca_gate: 86400.0  # 1 day
+
+integrity_v1_decision:
+  weights: [0.4, 0.2, 0.2, 0.2]
+  threshold_monitor_to_watch: 0.25
+  threshold_watch_to_warning: 0.50
+  threshold_warning_to_critical: 0.75
+  pc_ref: 1.0e-4
+  cov_norm_ref: 100.0
+  growth_rate_ref: 1.0
+  staleness_ref: 86400.0

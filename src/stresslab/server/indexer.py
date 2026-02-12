@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from stresslab.server.schemas import RunIndex, SweepIndex, MCBatchIndex
+from stresslab.server.schemas import RunIndex, SweepIndex, MCBatchIndex, SanityFlags, ConfigSnapshot, RunStory
 
 
 def _iso_mtime(p: Path) -> str:
@@ -194,6 +194,14 @@ class WorkspaceIndexer:
         except ValueError:
             rel_path = summary_path.parent
 
+        # Extract sanity and config sub-dicts if present
+        sanity_raw = data.get("sanity")
+        sanity = SanityFlags(**sanity_raw) if isinstance(sanity_raw, dict) else None
+        config_raw = data.get("config")
+        config_snap = ConfigSnapshot(**config_raw) if isinstance(config_raw, dict) else None
+        story_raw = data.get("story")
+        story = RunStory(**story_raw) if isinstance(story_raw, dict) else None
+
         self._runs.append(RunIndex(
             run_id=run_id,
             path=str(rel_path).replace("\\", "/"),
@@ -219,6 +227,9 @@ class WorkspaceIndexer:
             staleness_pc_correlation=data.get("staleness_pc_correlation"),
             mean_freshness=data.get("mean_freshness"),
             min_freshness=data.get("min_freshness"),
+            sanity=sanity,
+            config=config_snap,
+            story=story,
         ))
 
     def _index_sweep(self, sweep_dir: Path, sweep_json: Path) -> None:

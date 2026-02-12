@@ -10,6 +10,27 @@ export interface HealthResponse extends VersionEnvelope {
   status: string;
 }
 
+export interface SanityFlags {
+  degradation_active: boolean;
+  pc_diverged: boolean;
+  staleness_ramped: boolean;
+}
+
+export interface ConfigSnapshot {
+  update_interval: number | null;
+  outage_windows: { start: number; end: number }[];
+  process_noise_scale: number | null;
+  pc_threshold: number | null;
+  t_start: number | null;
+  t_end: number | null;
+  dt: number | null;
+  combined_hard_body_radius: number | null;
+}
+
+export interface RunStory {
+  bullets: string[];
+}
+
 export interface RunIndex {
   run_id: string;
   path: string;
@@ -35,6 +56,9 @@ export interface RunIndex {
   staleness_pc_correlation: number | null;
   mean_freshness: number | null;
   min_freshness: number | null;
+  sanity: SanityFlags | null;
+  config: ConfigSnapshot | null;
+  story: RunStory | null;
 }
 
 export interface RunListResponse extends VersionEnvelope {
