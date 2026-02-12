@@ -185,6 +185,11 @@ class KnowledgeStream:
 # ---------------------------------------------------------------------------
 # Configuration containers
 # ---------------------------------------------------------------------------
+class ConfigValidationError(ValueError):
+    """Raised when a configuration dataclass has invalid field values."""
+    pass
+
+
 @dataclass
 class ProcessNoiseConfig:
     """Process noise in RTN frame (acceleration noise, km^2/s^4)."""
@@ -192,6 +197,16 @@ class ProcessNoiseConfig:
     sigma_tangential: float = 1e-9
     sigma_normal: float = 1e-9
     scale: float = 1.0
+
+    def __post_init__(self):
+        if self.sigma_radial < 0:
+            raise ConfigValidationError("sigma_radial must be >= 0")
+        if self.sigma_tangential < 0:
+            raise ConfigValidationError("sigma_tangential must be >= 0")
+        if self.sigma_normal < 0:
+            raise ConfigValidationError("sigma_normal must be >= 0")
+        if self.scale <= 0:
+            raise ConfigValidationError("process noise scale must be > 0")
 
     def Q_rtn(self) -> np.ndarray:
         """3x3 diagonal acceleration noise in RTN."""
@@ -211,6 +226,21 @@ class MeasurementConfig:
     outage_windows: list = field(default_factory=list)
     # Each outage: {"start": float, "end": float} in seconds from epoch
 
+    def __post_init__(self):
+        if self.update_interval <= 0:
+            raise ConfigValidationError("update_interval must be > 0")
+        if self.noise_sigma_pos <= 0:
+            raise ConfigValidationError("noise_sigma_pos must be > 0")
+        for i, w in enumerate(self.outage_windows):
+            if not isinstance(w, dict) or "start" not in w or "end" not in w:
+                raise ConfigValidationError(
+                    f"outage_windows[{i}] must be a dict with 'start' and 'end' keys"
+                )
+            if w["end"] <= w["start"]:
+                raise ConfigValidationError(
+                    f"outage_windows[{i}]: end ({w['end']}) must be > start ({w['start']})"
+                )
+
 
 @dataclass
 class ManeuverConfig:
@@ -219,6 +249,12 @@ class ManeuverConfig:
     delta_v_sigma: float = 0.001  # km/s 1-sigma per axis
     execution_time: float = 0.0  # seconds from epoch
 
+    def __post_init__(self):
+        if self.delta_v_sigma < 0:
+            raise ConfigValidationError("delta_v_sigma must be >= 0")
+        if self.execution_time < 0:
+            raise ConfigValidationError("execution_time must be >= 0")
+
 
 @dataclass
 class ThresholdV1Config:
@@ -226,6 +262,14 @@ class ThresholdV1Config:
     pc_threshold: float = 1e-4
     miss_distance_threshold: Optional[float] = None  # km
     time_to_tca_gate: float = 86400.0  # seconds (trigger only within this)
+
+    def __post_init__(self):
+        if self.pc_threshold <= 0:
+            raise ConfigValidationError("pc_threshold must be > 0")
+        if self.miss_distance_threshold is not None and self.miss_distance_threshold <= 0:
+            raise ConfigValidationError("miss_distance_threshold must be > 0 when set")
+        if self.time_to_tca_gate <= 0:
+            raise ConfigValidationError("time_to_tca_gate must be > 0")
 
 
 @dataclass
@@ -242,6 +286,28 @@ class IntegrityV1Config:
     cov_norm_ref: float = 100.0  # km^2
     growth_rate_ref: float = 1.0  # km^2/s
     staleness_ref: float = 86400.0  # seconds
+
+    def __post_init__(self):
+        w = np.asarray(self.weights)
+        if w.shape != (4,):
+            raise ConfigValidationError("weights must have exactly 4 elements")
+        if np.any(w < 0):
+            raise ConfigValidationError("all weights must be >= 0")
+        if not (self.threshold_monitor_to_watch
+                < self.threshold_watch_to_warning
+                < self.threshold_warning_to_critical):
+            raise ConfigValidationError(
+                "integrity-v1 thresholds must be strictly increasing: "
+                "monitor_to_watch < watch_to_warning < warning_to_critical"
+            )
+        if self.pc_ref <= 0:
+            raise ConfigValidationError("pc_ref must be > 0")
+        if self.cov_norm_ref <= 0:
+            raise ConfigValidationError("cov_norm_ref must be > 0")
+        if self.growth_rate_ref <= 0:
+            raise ConfigValidationError("growth_rate_ref must be > 0")
+        if self.staleness_ref <= 0:
+            raise ConfigValidationError("staleness_ref must be > 0")
 
 
 @dataclass
@@ -277,6 +343,24 @@ class SimulationConfig:
 
     # Reproducibility
     seed: int = 42
+
+    def __post_init__(self):
+        if self.dt <= 0:
+            raise ConfigValidationError("dt must be > 0")
+        if self.t_end <= self.t_start:
+            raise ConfigValidationError(
+                f"t_end ({self.t_end}) must be > t_start ({self.t_start})"
+            )
+        if self.combined_hard_body_radius <= 0:
+            raise ConfigValidationError("combined_hard_body_radius must be > 0")
+        if self.state_obj1.shape != (6,):
+            raise ConfigValidationError("state_obj1 must be a 6-element array")
+        if self.state_obj2.shape != (6,):
+            raise ConfigValidationError("state_obj2 must be a 6-element array")
+        if self.cov_obj1.shape != (6, 6):
+            raise ConfigValidationError("cov_obj1 must be a 6x6 matrix")
+        if self.cov_obj2.shape != (6, 6):
+            raise ConfigValidationError("cov_obj2 must be a 6x6 matrix")
 
     def run_id(self) -> str:
         """SHA-256 hash of the fully-resolved config + code version.

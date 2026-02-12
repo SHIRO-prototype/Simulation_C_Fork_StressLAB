@@ -83,6 +83,7 @@ def run_monte_carlo(
     randomize_pn: bool = True,
     output_dir: Optional[Path] = None,
     verbose: bool = False,
+    progress: bool = False,
 ) -> pd.DataFrame:
     """Run Monte Carlo batch analysis.
 
@@ -94,6 +95,7 @@ def run_monte_carlo(
         randomize_pn: randomize process noise scale
         output_dir: directory for aggregate outputs
         verbose: print progress
+        progress: show tqdm progress bar
 
     Returns:
         DataFrame with one row per run containing summary metrics.
@@ -101,7 +103,15 @@ def run_monte_carlo(
     rng = np.random.default_rng(base_config.seed)
     results = []
 
-    for i in range(n_runs):
+    loop_iter = range(n_runs)
+    if progress:
+        try:
+            from tqdm import tqdm
+            loop_iter = tqdm(loop_iter, desc="Monte Carlo", unit="run", leave=True)
+        except ImportError:
+            pass  # tqdm not installed; fall back silently
+
+    for i in loop_iter:
         if verbose:
             print(f"\n[Monte Carlo] Run {i+1}/{n_runs}")
 

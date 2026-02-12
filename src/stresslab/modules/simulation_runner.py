@@ -72,6 +72,7 @@ def run_simulation(
     config: SimulationConfig,
     output_dir: Optional[Path] = None,
     verbose: bool = False,
+    progress: bool = False,
 ) -> dict:
     """Execute a single simulation run.
 
@@ -79,6 +80,7 @@ def run_simulation(
         config: full simulation configuration
         output_dir: directory for output files (if None, no files written)
         verbose: print progress
+        progress: show tqdm progress bar
 
     Returns:
         dict with keys:
@@ -116,7 +118,18 @@ def run_simulation(
     # Time loop
     times = np.arange(config.t_start, config.t_end, config.dt)
 
-    for i, t in enumerate(times[:-1]):
+    loop_iter = enumerate(times[:-1])
+    if progress:
+        try:
+            from tqdm import tqdm
+            loop_iter = tqdm(
+                loop_iter, total=len(times) - 1,
+                desc="Simulation", unit="step", leave=True,
+            )
+        except ImportError:
+            pass  # tqdm not installed; fall back silently
+
+    for i, t in loop_iter:
         dt = config.dt
 
         # ---- 1. Propagation ----
