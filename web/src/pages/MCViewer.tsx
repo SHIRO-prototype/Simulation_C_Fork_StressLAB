@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { fetchMCBatches, fetchMCSummary } from "../lib/api";
 import type { MCBatchIndex } from "../lib/types";
 import MCPlots from "../components/MCPlots";
 
 export default function MCViewer() {
+  const { batchId: urlBatchId } = useParams<{ batchId: string }>();
+  const navigate = useNavigate();
+
   const [batches, setBatches] = useState<MCBatchIndex[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(urlBatchId ?? null);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -24,6 +28,13 @@ export default function MCViewer() {
       )
       .finally(() => setLoading(false));
   }, []);
+
+  /* ---- sync URL param to selection ---- */
+  useEffect(() => {
+    if (urlBatchId && urlBatchId !== selectedId) {
+      setSelectedId(urlBatchId);
+    }
+  }, [urlBatchId]);
 
   /* ---- load summary when a batch is selected ---- */
   useEffect(() => {
@@ -41,12 +52,18 @@ export default function MCViewer() {
       .finally(() => setSummaryLoading(false));
   }, [selectedId]);
 
+  const handleSelect = (id: string) => {
+    const newId = id === selectedId ? null : id;
+    setSelectedId(newId);
+    navigate(newId ? `/mc/${newId}` : "/mc", { replace: true });
+  };
+
   /* ---- render ---- */
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <p className="text-gray-500 text-sm">Loading Monte Carlo batches…</p>
+        <p className="text-gray-500 text-sm">Loading Monte Carlo batches...</p>
       </div>
     );
   }
@@ -99,9 +116,7 @@ export default function MCViewer() {
               return (
                 <tr
                   key={b.batch_id}
-                  onClick={() =>
-                    setSelectedId(active ? null : b.batch_id)
-                  }
+                  onClick={() => handleSelect(b.batch_id)}
                   className={[
                     "cursor-pointer transition-colors",
                     active
@@ -113,13 +128,13 @@ export default function MCViewer() {
                     {b.batch_id}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                    {b.n_runs ?? "—"}
+                    {b.n_runs ?? "\u2014"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                    {b.successful_runs ?? "—"}
+                    {b.successful_runs ?? "\u2014"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-500">
-                    {b.created_at ?? "—"}
+                    {b.created_at ?? "\u2014"}
                   </td>
                 </tr>
               );
@@ -132,7 +147,7 @@ export default function MCViewer() {
       {selectedId && (
         <div className="space-y-4">
           {summaryLoading && (
-            <p className="text-sm text-gray-500">Loading summary…</p>
+            <p className="text-sm text-gray-500">Loading summary...</p>
           )}
 
           {summaryError && (

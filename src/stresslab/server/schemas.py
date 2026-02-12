@@ -38,6 +38,16 @@ class RunIndex(BaseModel):
     max_staleness: Optional[float] = None
     decision_instability_index: Optional[float] = None
     total_timesteps: Optional[int] = None
+    outage_sensitivity_score: Optional[float] = None
+    max_pc_reference: Optional[float] = None
+    max_cov_trace: Optional[float] = None
+    decision_transitions_per_hour: Optional[float] = None
+    decision_entropy: Optional[float] = None
+    mean_pc_drift: Optional[float] = None
+    max_pc_drift: Optional[float] = None
+    staleness_pc_correlation: Optional[float] = None
+    mean_freshness: Optional[float] = None
+    min_freshness: Optional[float] = None
 
 
 class RunListResponse(VersionMixin):

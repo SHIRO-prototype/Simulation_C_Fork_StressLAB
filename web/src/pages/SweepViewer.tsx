@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { fetchSweeps, fetchSweepSummary } from "../lib/api";
 import type { SweepIndex } from "../lib/types";
 import SweepPlots from "../components/SweepPlots";
 
 export default function SweepViewer() {
+  const { sweepId: urlSweepId } = useParams<{ sweepId: string }>();
+  const navigate = useNavigate();
+
   const [sweeps, setSweeps] = useState<SweepIndex[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(urlSweepId ?? null);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -24,6 +28,13 @@ export default function SweepViewer() {
       )
       .finally(() => setLoading(false));
   }, []);
+
+  /* ---- sync URL param to selection ---- */
+  useEffect(() => {
+    if (urlSweepId && urlSweepId !== selectedId) {
+      setSelectedId(urlSweepId);
+    }
+  }, [urlSweepId]);
 
   /* ---- load summary when a sweep is selected ---- */
   useEffect(() => {
@@ -41,12 +52,18 @@ export default function SweepViewer() {
       .finally(() => setSummaryLoading(false));
   }, [selectedId]);
 
+  const handleSelect = (id: string) => {
+    const newId = id === selectedId ? null : id;
+    setSelectedId(newId);
+    navigate(newId ? `/sweeps/${newId}` : "/sweeps", { replace: true });
+  };
+
   /* ---- render ---- */
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <p className="text-gray-500 text-sm">Loading sweeps…</p>
+        <p className="text-gray-500 text-sm">Loading sweeps...</p>
       </div>
     );
   }
@@ -99,9 +116,7 @@ export default function SweepViewer() {
               return (
                 <tr
                   key={s.sweep_id}
-                  onClick={() =>
-                    setSelectedId(active ? null : s.sweep_id)
-                  }
+                  onClick={() => handleSelect(s.sweep_id)}
                   className={[
                     "cursor-pointer transition-colors",
                     active
@@ -113,16 +128,16 @@ export default function SweepViewer() {
                     {s.sweep_id}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                    {s.sweep_param ?? "—"}
+                    {s.sweep_param ?? "\u2014"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                    {s.n_values ?? "—"}
+                    {s.n_values ?? "\u2014"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                    {s.seed ?? "—"}
+                    {s.seed ?? "\u2014"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-500">
-                    {s.created_at ?? "—"}
+                    {s.created_at ?? "\u2014"}
                   </td>
                 </tr>
               );
@@ -135,7 +150,7 @@ export default function SweepViewer() {
       {selectedId && (
         <div className="space-y-4">
           {summaryLoading && (
-            <p className="text-sm text-gray-500">Loading summary…</p>
+            <p className="text-sm text-gray-500">Loading summary...</p>
           )}
 
           {summaryError && (

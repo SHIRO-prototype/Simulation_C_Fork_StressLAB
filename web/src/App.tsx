@@ -12,7 +12,9 @@ export default function App() {
         <Route path="/" element={<RunsBrowser />} />
         <Route path="/runs/:runId" element={<RunDetail />} />
         <Route path="/sweeps" element={<SweepViewer />} />
+        <Route path="/sweeps/:sweepId" element={<SweepViewer />} />
         <Route path="/mc" element={<MCViewer />} />
+        <Route path="/mc/:batchId" element={<MCViewer />} />
       </Routes>
     </Layout>
   );

@@ -143,6 +143,9 @@ def create_app(workspace: Path, dev_mode: bool = False) -> FastAPI:
             meta={
                 **meta,
                 "total_rows_before_downsample": len(df),
+                "schema_version": SCHEMA_VERSION,
+                "contract_version": METRICS_CONTRACT_VERSION,
+                "code_version": STRESSLAB_VERSION,
             },
             columns=payload["columns"],
             rows=payload["rows"],
@@ -198,9 +201,17 @@ def create_app(workspace: Path, dev_mode: bool = False) -> FastAPI:
 
         if csv_path.exists():
             import pandas as pd
+            import numpy as np
             mc_df = pd.read_csv(csv_path)
-            data["csv_rows"] = len(mc_df)
             data["csv_columns"] = mc_df.columns.tolist()
+            data["csv_total_rows"] = len(mc_df)
+            # Send actual row data for histogram rendering (cap at 10k)
+            rows = mc_df.head(10000).values.tolist()
+            # Convert NaN/inf to None for JSON serialization
+            data["csv_rows"] = [
+                [None if (isinstance(v, float) and (np.isnan(v) or np.isinf(v))) else v for v in row]
+                for row in rows
+            ]
 
         if not data:
             raise HTTPException(404, f"No MC summary found for: {batch_id}")
@@ -229,7 +240,7 @@ def create_app(workspace: Path, dev_mode: bool = False) -> FastAPI:
     def download_artifact(run_id: str, filename: str):
         """Download a raw artifact file (summary JSON or timeseries parquet)."""
         # Security: only allow specific filenames
-        allowed_prefixes = ("summary_", "timeseries_")
+        allowed_prefixes = ("summary_", "timeseries_", "scenario_")
         allowed_suffixes = (".json", ".parquet")
         if not any(filename.startswith(p) for p in allowed_prefixes):
             raise HTTPException(400, "Invalid filename prefix")

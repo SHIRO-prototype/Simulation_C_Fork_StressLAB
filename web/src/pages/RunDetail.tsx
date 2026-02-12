@@ -156,8 +156,32 @@ export default function RunDetail() {
           value={fmtSci(s.max_pc_degraded)}
         />
         <MetricCard
+          label="Max Pc Reference"
+          value={fmtSci(s.max_pc_reference)}
+        />
+        <MetricCard
+          label="Max Cov Trace"
+          value={fmtSci(s.max_cov_trace)}
+        />
+        <MetricCard
           label="Max Staleness"
           value={fmtSeconds(s.max_staleness)}
+        />
+        <MetricCard
+          label="Transitions/hr"
+          value={fmtFixed(s.decision_transitions_per_hour, 2)}
+        />
+        <MetricCard
+          label="Decision Entropy"
+          value={fmtFixed(s.decision_entropy, 4)}
+        />
+        <MetricCard
+          label="Mean Pc Drift"
+          value={fmtSci(s.mean_pc_drift)}
+        />
+        <MetricCard
+          label="Max Pc Drift"
+          value={fmtSci(s.max_pc_drift)}
         />
         <MetricCard
           label="Staleness-Pc Corr."
@@ -167,20 +191,40 @@ export default function RunDetail() {
           label="Outage Sensitivity"
           value={fmtFixed(s.outage_sensitivity_score, 3)}
         />
+        <MetricCard
+          label="Mean Freshness"
+          value={fmtFixed(s.mean_freshness, 3)}
+        />
+        <MetricCard
+          label="Min Freshness"
+          value={fmtFixed(s.min_freshness, 3)}
+        />
+        <MetricCard
+          label="Total Timesteps"
+          value={s.total_timesteps != null ? String(s.total_timesteps) : "---"}
+        />
+        <MetricCard
+          label="Dynamics Model"
+          value={typeof s.dynamics_model === "string" ? s.dynamics_model : "---"}
+        />
+        <MetricCard
+          label="Seed"
+          value={s.seed != null ? String(s.seed) : "---"}
+        />
       </div>
 
       {/* ---- Download buttons ---- */}
       {runId && (
         <div className="flex gap-3">
           <a
-            href={runDownloadUrl(runId, "summary.json")}
+            href={runDownloadUrl(runId, `summary_${runId}.json`)}
             download
             className="inline-flex items-center rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             Download Summary JSON
           </a>
           <a
-            href={runDownloadUrl(runId, "timeseries.parquet")}
+            href={runDownloadUrl(runId, `timeseries_${runId}.parquet`)}
             download
             className="inline-flex items-center rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
@@ -195,14 +239,17 @@ export default function RunDetail() {
           <PostureTimeline
             columns={timeseries.columns}
             rows={timeseries.rows}
+            summary={s}
           />
           <PcDriftPlot
             columns={timeseries.columns}
             rows={timeseries.rows}
+            summary={s}
           />
           <InstabilityPlot
             columns={timeseries.columns}
             rows={timeseries.rows}
+            summary={s}
           />
         </div>
       )}

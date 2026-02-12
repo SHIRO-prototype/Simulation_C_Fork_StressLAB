@@ -25,6 +25,16 @@ export interface RunIndex {
   max_staleness: number | null;
   decision_instability_index: number | null;
   total_timesteps: number | null;
+  outage_sensitivity_score: number | null;
+  max_pc_reference: number | null;
+  max_cov_trace: number | null;
+  decision_transitions_per_hour: number | null;
+  decision_entropy: number | null;
+  mean_pc_drift: number | null;
+  max_pc_drift: number | null;
+  staleness_pc_correlation: number | null;
+  mean_freshness: number | null;
+  min_freshness: number | null;
 }
 
 export interface RunListResponse extends VersionEnvelope {

@@ -209,6 +209,16 @@ class WorkspaceIndexer:
             max_staleness=data.get("max_staleness"),
             decision_instability_index=data.get("decision_instability_index"),
             total_timesteps=data.get("total_timesteps"),
+            outage_sensitivity_score=data.get("outage_sensitivity_score"),
+            max_pc_reference=data.get("max_pc_reference"),
+            max_cov_trace=data.get("max_cov_trace"),
+            decision_transitions_per_hour=data.get("decision_transitions_per_hour"),
+            decision_entropy=data.get("decision_entropy"),
+            mean_pc_drift=data.get("mean_pc_drift"),
+            max_pc_drift=data.get("max_pc_drift"),
+            staleness_pc_correlation=data.get("staleness_pc_correlation"),
+            mean_freshness=data.get("mean_freshness"),
+            min_freshness=data.get("min_freshness"),
         ))
 
     def _index_sweep(self, sweep_dir: Path, sweep_json: Path) -> None:

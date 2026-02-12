@@ -30,12 +30,30 @@ const columns = [
     header: "Seed",
     cell: (info) => info.getValue() ?? "---",
   }),
+  col.accessor("dynamics_model", {
+    header: "Dynamics",
+    cell: (info) => info.getValue() ?? "---",
+  }),
   col.accessor("created_at", {
     header: "Created",
     cell: (info) => {
       const v = info.getValue();
       if (!v) return "---";
       return new Date(v).toLocaleString();
+    },
+  }),
+  col.accessor("threshold_v1_trigger_time", {
+    header: "T-v1 Trigger",
+    cell: (info) => {
+      const v = info.getValue();
+      return v != null ? `${v}s` : "---";
+    },
+  }),
+  col.accessor("integrity_v1_trigger_time", {
+    header: "I-v1 Trigger",
+    cell: (info) => {
+      const v = info.getValue();
+      return v != null ? `${v}s` : "---";
     },
   }),
   col.accessor("decision_compression_window", {
@@ -46,17 +64,24 @@ const columns = [
     },
   }),
   col.accessor("false_safe_rate", {
-    header: "False-Safe Rate",
+    header: "False-Safe",
+    cell: (info) => {
+      const v = info.getValue();
+      return v != null ? v.toFixed(3) : "---";
+    },
+  }),
+  col.accessor("false_alert_rate", {
+    header: "False-Alert",
     cell: (info) => {
       const v = info.getValue();
       return v != null ? v.toFixed(3) : "---";
     },
   }),
   col.accessor("max_pc_degraded", {
-    header: "Max PC Degraded",
+    header: "Max Pc Deg",
     cell: (info) => {
       const v = info.getValue();
-      return v != null ? v.toExponential() : "---";
+      return v != null ? v.toExponential(2) : "---";
     },
   }),
   col.accessor("decision_instability_index", {
@@ -65,6 +90,10 @@ const columns = [
       const v = info.getValue();
       return v != null ? v.toFixed(4) : "---";
     },
+  }),
+  col.accessor("total_timesteps", {
+    header: "Steps",
+    cell: (info) => info.getValue() ?? "---",
   }),
 ];
 

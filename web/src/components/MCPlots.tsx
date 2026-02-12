@@ -19,8 +19,26 @@ const STAT_KEYS = [
   "std_dcw",
   "mean_false_safe_rate",
   "std_false_safe_rate",
+  "mean_false_alert_rate",
+  "std_false_alert_rate",
+  "mean_decision_instability_index",
   "n_runs",
 ] as const;
+
+/** Histogram configs to render from CSV data */
+const HISTOGRAMS: {
+  column: string;
+  label: string;
+  color: string;
+}[] = [
+  { column: "decision_compression_window", label: "Decision Compression Window Distribution", color: "#3b82f6" },
+  { column: "false_safe_rate", label: "False-Safe Rate Distribution", color: "#ef4444" },
+  { column: "false_alert_rate", label: "False-Alert Rate Distribution", color: "#f97316" },
+  { column: "max_pc_degraded", label: "Max Pc Degraded Distribution", color: "#8b5cf6" },
+  { column: "decision_instability_index", label: "Decision Instability Distribution", color: "#06b6d4" },
+  { column: "staleness_pc_correlation", label: "Staleness-Pc Correlation Distribution", color: "#10b981" },
+  { column: "outage_sensitivity_score", label: "Outage Sensitivity Distribution", color: "#ec4899" },
+];
 
 export default function MCPlots({ summary }: MCPlotsProps) {
   const csvColumns = summary.csv_columns as string[] | undefined;
@@ -36,6 +54,11 @@ export default function MCPlots({ summary }: MCPlotsProps) {
       </p>
     );
   }
+
+  // Filter histograms to only those with available columns
+  const availableHistograms = hasCsv
+    ? HISTOGRAMS.filter((h) => csvColumns.includes(h.column))
+    : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -67,69 +90,46 @@ export default function MCPlots({ summary }: MCPlotsProps) {
               ))}
             </tbody>
           </table>
+          {typeof summary.csv_total_rows === "number" && (
+            <p style={{ marginTop: "0.5rem", color: "#94a3b8", fontSize: "0.75rem" }}>
+              Total runs in CSV: {summary.csv_total_rows}
+            </p>
+          )}
         </div>
       )}
 
-      {hasCsv && csvColumns.includes("decision_compression_window") && (
+      {availableHistograms.map((h) => (
         <Plot
+          key={h.column}
           data={[
             {
               x: extractColumn(
-                csvColumns,
-                csvRows,
-                "decision_compression_window",
+                csvColumns!,
+                csvRows!,
+                h.column,
               ) as number[],
               type: "histogram",
-              name: "DCW Distribution",
-              marker: { color: "#3b82f6" },
+              name: h.label,
+              marker: { color: h.color },
             },
           ]}
           layout={{
-            title: { text: "Decision Compression Window Distribution" },
+            title: { text: h.label },
             height: 350,
-            xaxis: { title: { text: "Decision Compression Window" } },
+            xaxis: { title: { text: h.column.replace(/_/g, " ") } },
             yaxis: { title: { text: "Count" } },
             margin: { t: 40, b: 60, l: 60, r: 20 },
           }}
           useResizeHandler
           style={{ width: "100%", height: "350px" }}
         />
-      )}
+      ))}
 
-      {hasCsv && csvColumns.includes("false_safe_rate") && (
-        <Plot
-          data={[
-            {
-              x: extractColumn(
-                csvColumns,
-                csvRows,
-                "false_safe_rate",
-              ) as number[],
-              type: "histogram",
-              name: "False-Safe Rate Distribution",
-              marker: { color: "#ef4444" },
-            },
-          ]}
-          layout={{
-            title: { text: "False-Safe Rate Distribution" },
-            height: 350,
-            xaxis: { title: { text: "False-Safe Rate" } },
-            yaxis: { title: { text: "Count" } },
-            margin: { t: 40, b: 60, l: 60, r: 20 },
-          }}
-          useResizeHandler
-          style={{ width: "100%", height: "350px" }}
-        />
+      {hasCsv && availableHistograms.length === 0 && (
+        <p style={{ color: "#94a3b8" }}>
+          No recognized metric columns found in Monte Carlo CSV data.
+        </p>
       )}
-
-      {hasCsv &&
-        !csvColumns.includes("decision_compression_window") &&
-        !csvColumns.includes("false_safe_rate") && (
-          <p style={{ color: "#94a3b8" }}>
-            Monte Carlo distribution plots will appear when batch data is
-            available.
-          </p>
-        )}
     </div>
   );
 }
