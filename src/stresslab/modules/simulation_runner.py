@@ -73,6 +73,7 @@ def run_simulation(
     output_dir: Optional[Path] = None,
     verbose: bool = False,
     progress: bool = False,
+    step_callback=None,
 ) -> dict:
     """Execute a single simulation run.
 
@@ -81,6 +82,9 @@ def run_simulation(
         output_dir: directory for output files (if None, no files written)
         verbose: print progress
         progress: show tqdm progress bar
+        step_callback: optional callable(dict) invoked after each timestep
+            with current simulation values (for live display). Must not
+            compute new physics; only reads from the in-memory values.
 
     Returns:
         dict with keys:
@@ -253,6 +257,26 @@ def run_simulation(
             decision=decision,
         )
         logger.record(step)
+
+        # ---- Step callback (for live display) ----
+        if step_callback is not None:
+            step_callback({
+                "t": t_now,
+                "time_to_tca": geom.time_to_tca,
+                "miss_distance": geom.miss_distance,
+                "rel_velocity": geom.rel_velocity_at_tca,
+                "staleness": max_staleness,
+                "pc_reference": risk.pc_reference,
+                "pc_degraded": risk.pc_degraded,
+                "risk_ratio": risk.risk_ratio,
+                "cov_norm": combined_cov_norm,
+                "growth_rate": combined_growth,
+                "threshold_v1_state": decision.threshold_v1_alert.value,
+                "integrity_v1_state": decision.integrity_v1_state.value,
+                "integrity_v1_score": decision.integrity_v1_score,
+                "threshold_v1_trigger": threshold_v1_trigger,
+                "integrity_v1_trigger": integrity_v1_trigger,
+            })
 
         if verbose and (i + 1) % 100 == 0:
             print(f"  t={t_now:.0f}s | miss={geom.miss_distance:.4f}km | "

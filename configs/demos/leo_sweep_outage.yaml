@@ -1,0 +1,47 @@
+# Demo: Sweep configuration for outage duration stress test
+# Designed for the sweep command to test how outage duration
+# affects decision timing and risk metrics.
+#
+# Usage:
+#   stresslab sweep outage.duration \
+#     --values 0h,1h,3h,6h,12h \
+#     --config configs/demos/leo_sweep_outage.yaml \
+#     --seed 42 --progress
+#   stresslab report outputs/sweep --formats png,json
+
+seed: 42
+miss_distance_km: 0.5
+dynamics_model: two_body_plus_J2
+
+timeline:
+  t_start: 0.0
+  t_end: 86400.0    # 1 day (faster sweep runs)
+  dt: 120.0          # 2-minute steps (speed vs resolution tradeoff)
+
+measurement:
+  update_interval: 3600.0
+  noise_sigma_pos: 0.01
+  outage_windows: []  # Sweep command will inject outage windows
+
+process_noise:
+  sigma_radial: 1.0e-9
+  sigma_tangential: 1.0e-9
+  sigma_normal: 1.0e-9
+  scale: 1.0
+
+risk:
+  combined_hard_body_radius: 0.02
+
+threshold_v1_decision:
+  pc_threshold: 1.0e-4
+  time_to_tca_gate: 86400.0
+
+integrity_v1_decision:
+  weights: [0.4, 0.2, 0.2, 0.2]
+  threshold_monitor_to_watch: 0.25
+  threshold_watch_to_warning: 0.50
+  threshold_warning_to_critical: 0.75
+  pc_ref: 1.0e-4
+  cov_norm_ref: 100.0
+  growth_rate_ref: 1.0
+  staleness_ref: 86400.0

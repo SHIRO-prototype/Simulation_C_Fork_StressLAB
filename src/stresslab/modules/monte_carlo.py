@@ -103,13 +103,37 @@ def run_monte_carlo(
     rng = np.random.default_rng(base_config.seed)
     results = []
 
+    # Choose progress display: Rich > tqdm > plain
     loop_iter = range(n_runs)
+    rich_progress = None
+    rich_task_id = None
     if progress:
         try:
-            from tqdm import tqdm
-            loop_iter = tqdm(loop_iter, desc="Monte Carlo", unit="run", leave=True)
+            from rich.progress import (
+                Progress, SpinnerColumn, BarColumn,
+                TextColumn, TimeRemainingColumn, MofNCompleteColumn,
+            )
+            rich_progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(bar_width=30),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
+                TextColumn("{task.fields[status]}"),
+            )
+            rich_progress.start()
+            rich_task_id = rich_progress.add_task(
+                "Monte Carlo", total=n_runs, status="starting..."
+            )
         except ImportError:
-            pass  # tqdm not installed; fall back silently
+            try:
+                from tqdm import tqdm
+                loop_iter = tqdm(loop_iter, desc="Monte Carlo", unit="run", leave=True)
+            except ImportError:
+                pass  # No progress display available
+
+    # Interval for writing partial stats
+    partial_interval = max(1, n_runs // 10)  # every ~10% of runs
 
     for i in loop_iter:
         if verbose:
@@ -171,6 +195,26 @@ def run_monte_carlo(
                 "seed": run_seed,
                 "error": str(e),
             })
+
+        # Update Rich progress if active
+        if rich_progress is not None and rich_task_id is not None:
+            status = f"seed={run_seed}"
+            rich_progress.update(rich_task_id, advance=1, status=status)
+
+        # Write partial aggregate stats periodically
+        if output_dir is not None and len(results) > 0 and (i + 1) % partial_interval == 0:
+            partial_df = pd.DataFrame(results)
+            partial_stats = _compute_aggregate_stats(partial_df)
+            partial_stats["runs_completed"] = len(results)
+            partial_stats["runs_total"] = n_runs
+            partial_path = output_dir / "monte_carlo_partial.json"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            with open(partial_path, "w") as f:
+                json.dump(partial_stats, f, indent=2)
+
+    # Stop Rich progress
+    if rich_progress is not None:
+        rich_progress.stop()
 
     mc_df = pd.DataFrame(results)
 
