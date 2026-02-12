@@ -20,7 +20,7 @@ scope:
     - process noise tuning
     - optional maneuver uncertainty injection
     - collision probability estimation
-    - dual decision logic comparison (baseline vs SHIRO model)
+    - dual decision logic comparison (threshold-v1 vs integrity-v1 model)
     - reproducible experiment logging
     - Monte Carlo batch analysis
   out_of_scope:
@@ -140,7 +140,7 @@ architecture:
         parameters:
           - combined_hard_body_radius
       outputs:
-        - collision_probability_baseline
+        - collision_probability_reference
         - collision_probability_degraded
         - risk_ratio
       notes: >
@@ -151,7 +151,7 @@ architecture:
       description: >
         Evaluates posture models side-by-side.
       models:
-        baseline_threshold_model:
+        threshold_v1_model:
           trigger_conditions:
             - Pc_threshold
             - miss_distance_threshold_optional
@@ -159,7 +159,7 @@ architecture:
           outputs:
             - trigger_time
             - alert_state
-        shiro_confidence_integrity_model:
+        integrity_v1_model:
           inputs:
             - collision_probability
             - covariance_norm
@@ -198,13 +198,13 @@ architecture:
             - covariance_norm_trace
             - covariance_growth_rate
             - collision_probability
-            - baseline_alert_state
-            - shiro_alert_state
+            - threshold_v1_alert_state
+            - integrity_v1_state
         run_summary:
           format: "json"
           fields:
-            - baseline_trigger_time
-            - shiro_trigger_time
+            - threshold_v1_trigger_time
+            - integrity_v1_trigger_time
             - decision_compression_window
             - false_safe_rate
             - false_alert_rate
@@ -212,7 +212,7 @@ architecture:
 
 evaluation_metrics:
   ground_truth_definition: "true_miss_distance < combined_hard_body_radius"
-  decision_compression_window: "baseline_trigger_time - shiro_trigger_time"
+  decision_compression_window: "threshold_v1_trigger_time - integrity_v1_trigger_time"
   outage_sensitivity_gradient: "d(trigger_time) / d(outage_duration) via finite difference"
   geometry:
     - miss_distance
@@ -242,7 +242,7 @@ monte_carlo:
   outputs:
     - statistical_summary_csv
     - distribution_plots
-    - comparative_baseline_vs_shiro_metrics
+    - comparative_threshold_v1_vs_integrity_v1_metrics
 
 reproducibility:
   deterministic_seed_required: true
@@ -253,7 +253,7 @@ reproducibility:
 success_criteria:
   - platform can demonstrate measurable trigger timing shift
     under increasing outage duration
-  - platform can quantify difference between baseline and SHIRO model
-    in false-safe and false-alert rates
+  - platform can quantify difference between threshold-v1 and integrity-v1
+    model in false-safe and false-alert rates
   - results reproducible across identical seeds
   - Monte Carlo statistics stable across batches

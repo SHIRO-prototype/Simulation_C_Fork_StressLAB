@@ -48,12 +48,12 @@ def run(seed, miss_distance, t_end, dt, dynamics, output_dir, verbose):
     result = run_simulation(config, output_dir=output, verbose=verbose)
 
     click.echo(f"\nRun ID: {result['run_id']}")
-    click.echo(f"Baseline trigger: {result['baseline_trigger_time']}")
-    click.echo(f"SHIRO trigger:    {result['shiro_trigger_time']}")
+    click.echo(f"Threshold-v1 trigger: {result['threshold_v1_trigger_time']}")
+    click.echo(f"Integrity-v1 trigger: {result['integrity_v1_trigger_time']}")
     if result.get("timeseries_path"):
-        click.echo(f"Time series:      {result['timeseries_path']}")
+        click.echo(f"Time series:          {result['timeseries_path']}")
     if result.get("summary_path"):
-        click.echo(f"Summary:          {result['summary_path']}")
+        click.echo(f"Summary:              {result['summary_path']}")
 
 
 @main.command()
@@ -86,7 +86,7 @@ def monte_carlo(seed, n_runs, miss_distance, t_end, dt, output_dir, verbose):
     click.echo(f"Output directory: {output}")
 
     # Print summary statistics
-    good = df.dropna(subset=["baseline_trigger_time", "shiro_trigger_time"], how="all")
+    good = df.dropna(subset=["threshold_v1_trigger_time", "integrity_v1_trigger_time"], how="all")
     if "decision_compression_window" in good.columns:
         dcw = good["decision_compression_window"].dropna()
         if len(dcw) > 0:

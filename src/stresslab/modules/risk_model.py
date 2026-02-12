@@ -100,27 +100,27 @@ def compute_collision_probability(
 
 def compute_risk(
     rel_position: np.ndarray,
-    P_baseline_obj1: np.ndarray,
-    P_baseline_obj2: np.ndarray,
+    P_reference_obj1: np.ndarray,
+    P_reference_obj2: np.ndarray,
     P_degraded_obj1: np.ndarray,
     P_degraded_obj2: np.ndarray,
     eta: np.ndarray,
     zeta: np.ndarray,
     combined_hard_body_radius: float,
 ) -> RiskResult:
-    """Compute baseline and degraded collision probabilities.
+    """Compute reference and degraded collision probabilities.
 
-    Baseline: Pc with nominal covariance (no outage effects).
+    Reference: Pc with nominal covariance (no outage effects).
     Degraded: Pc with actual covariance (includes outages).
 
     In practice during the simulation, we track both a "nominal"
     covariance (always updated) and the actual covariance. For
     simplicity, if only one covariance stream is available, the
-    baseline can use the same covariance and the degraded uses
+    reference can use the same covariance and the degraded uses
     the one with outage effects applied.
     """
-    pc_baseline = compute_collision_probability(
-        rel_position, P_baseline_obj1, P_baseline_obj2,
+    pc_reference = compute_collision_probability(
+        rel_position, P_reference_obj1, P_reference_obj2,
         eta, zeta, combined_hard_body_radius,
     )
     pc_degraded = compute_collision_probability(
@@ -128,10 +128,10 @@ def compute_risk(
         eta, zeta, combined_hard_body_radius,
     )
 
-    ratio = pc_degraded / max(pc_baseline, 1e-30)
+    ratio = pc_degraded / max(pc_reference, 1e-30)
 
     return RiskResult(
-        pc_baseline=pc_baseline,
+        pc_reference=pc_reference,
         pc_degraded=pc_degraded,
         risk_ratio=ratio,
     )

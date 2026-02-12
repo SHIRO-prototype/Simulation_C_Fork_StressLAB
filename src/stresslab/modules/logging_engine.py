@@ -17,8 +17,15 @@ import pandas as pd
 from stresslab.types import (
     TimeStep,
     AlertState,
-    ShiroState,
+    IntegrityV1State,
     SimulationConfig,
+)
+from stresslab.metrics_contract import (
+    METRICS_CONTRACT_VERSION,
+    compression_window,
+    is_true_danger,
+    outage_sensitivity_score as compute_outage_sensitivity,
+    MetricsSummary,
 )
 
 
@@ -49,12 +56,12 @@ class LoggingEngine:
             "cov_max_eig_obj2": step.covariance_obj2.max_eigenvalue,
             "cov_growth_rate_obj1": step.covariance_obj1.growth_rate,
             "cov_growth_rate_obj2": step.covariance_obj2.growth_rate,
-            "pc_baseline": step.risk.pc_baseline,
+            "pc_reference": step.risk.pc_reference,
             "pc_degraded": step.risk.pc_degraded,
             "risk_ratio": step.risk.risk_ratio,
-            "baseline_alert_state": step.decision.baseline_alert.value,
-            "shiro_alert_state": step.decision.shiro_state.value,
-            "shiro_score": step.decision.shiro_score,
+            "threshold_v1_alert_state": step.decision.threshold_v1_alert.value,
+            "integrity_v1_state": step.decision.integrity_v1_state.value,
+            "integrity_v1_score": step.decision.integrity_v1_score,
             "measurement_applied_obj1": step.measurement_obj1.applied,
             "measurement_applied_obj2": step.measurement_obj2.applied,
             "staleness_obj1": step.measurement_obj1.time_since_last_update,
@@ -73,51 +80,83 @@ class LoggingEngine:
         df.to_parquet(path, index=False)
         return path
 
+    def compute_summary(
+        self,
+        config: SimulationConfig,
+        threshold_v1_trigger_time: Optional[float],
+        integrity_v1_trigger_time: Optional[float],
+    ) -> MetricsSummary:
+        """Compute a frozen MetricsSummary using the metrics contract."""
+        df = self.to_dataframe()
+
+        # Decision compression window (via contract)
+        dcw = compression_window(threshold_v1_trigger_time, integrity_v1_trigger_time)
+
+        # Ground-truth classification (via contract)
+        hbr = config.combined_hard_body_radius
+        true_danger = df["miss_distance"].apply(
+            lambda md: is_true_danger(md, hbr)
+        )
+
+        # False safe: threshold-v1 said Safe but was actually dangerous
+        threshold_v1_safe = df["threshold_v1_alert_state"] == AlertState.SAFE.value
+        n_danger = int(true_danger.sum())
+        false_safe_rate = float((threshold_v1_safe & true_danger).sum()) / max(n_danger, 1)
+
+        # False alert: threshold-v1 said Alert but was not dangerous
+        threshold_v1_alert = df["threshold_v1_alert_state"] == AlertState.ALERT.value
+        true_safe = ~true_danger
+        n_safe = int(true_safe.sum())
+        false_alert_rate = float((threshold_v1_alert & true_safe).sum()) / max(n_safe, 1)
+
+        # Outage sensitivity (via contract)
+        max_stale = float(df["staleness_obj1"].max())
+
+        return MetricsSummary(
+            contract_version=METRICS_CONTRACT_VERSION,
+            threshold_v1_trigger_time=threshold_v1_trigger_time,
+            integrity_v1_trigger_time=integrity_v1_trigger_time,
+            decision_compression_window=dcw,
+            false_safe_rate=false_safe_rate,
+            false_alert_rate=false_alert_rate,
+            outage_sensitivity_score=compute_outage_sensitivity(max_stale),
+            max_pc_degraded=float(df["pc_degraded"].max()),
+            max_pc_reference=float(df["pc_reference"].max()),
+            max_cov_trace=float(df["cov_trace_obj1"].max()),
+            max_staleness=max_stale,
+            total_timesteps=len(df),
+        )
+
     def write_summary(
         self,
         output_dir: Path,
         run_id: str,
         config: SimulationConfig,
-        baseline_trigger_time: Optional[float],
-        shiro_trigger_time: Optional[float],
+        threshold_v1_trigger_time: Optional[float],
+        integrity_v1_trigger_time: Optional[float],
     ) -> Path:
         """Write run summary to JSON."""
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Compute aggregate metrics
-        df = self.to_dataframe()
-
-        # Decision compression window
-        dcw = None
-        if baseline_trigger_time is not None and shiro_trigger_time is not None:
-            dcw = baseline_trigger_time - shiro_trigger_time
-
-        # False rates (require ground truth: miss_distance < hard_body_radius)
-        hbr = config.combined_hard_body_radius
-        true_danger = df["miss_distance"] < hbr
-
-        # False safe: baseline said Safe but was actually dangerous
-        baseline_safe = df["baseline_alert_state"] == AlertState.SAFE.value
-        false_safe_baseline = float((baseline_safe & true_danger).sum()) / max(true_danger.sum(), 1)
-
-        # False alert: baseline said Alert but was not dangerous
-        baseline_alert = df["baseline_alert_state"] == AlertState.ALERT.value
-        true_safe = ~true_danger
-        false_alert_baseline = float((baseline_alert & true_safe).sum()) / max(true_safe.sum(), 1)
-
-        # Outage sensitivity score: max staleness observed
-        max_staleness = float(df["staleness_obj1"].max())
+        metrics = self.compute_summary(
+            config, threshold_v1_trigger_time, integrity_v1_trigger_time,
+        )
 
         summary = {
             "run_id": run_id,
             "seed": config.seed,
-            "baseline_trigger_time": baseline_trigger_time,
-            "shiro_trigger_time": shiro_trigger_time,
-            "decision_compression_window": dcw,
-            "false_safe_rate": false_safe_baseline,
-            "false_alert_rate": false_alert_baseline,
-            "outage_sensitivity_score": max_staleness,
-            "total_timesteps": len(df),
+            "metrics_contract_version": metrics.contract_version,
+            "threshold_v1_trigger_time": metrics.threshold_v1_trigger_time,
+            "integrity_v1_trigger_time": metrics.integrity_v1_trigger_time,
+            "decision_compression_window": metrics.decision_compression_window,
+            "false_safe_rate": metrics.false_safe_rate,
+            "false_alert_rate": metrics.false_alert_rate,
+            "outage_sensitivity_score": metrics.outage_sensitivity_score,
+            "max_pc_degraded": metrics.max_pc_degraded,
+            "max_pc_reference": metrics.max_pc_reference,
+            "max_cov_trace": metrics.max_cov_trace,
+            "max_staleness": metrics.max_staleness,
+            "total_timesteps": metrics.total_timesteps,
             "dynamics_model": config.dynamics_model.value,
         }
 

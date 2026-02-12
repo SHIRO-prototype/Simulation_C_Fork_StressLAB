@@ -7,12 +7,12 @@ Manages the time-stepping loop, calling modules in sequence:
   4. covariance_engine   - apply measurement update if applicable
   5. geometry_metrics    - compute encounter geometry
   6. risk_model          - compute collision probability
-  7. decision_layer      - evaluate baseline + SHIRO
+  7. decision_layer      - evaluate threshold-v1 + integrity-v1
   8. logging_engine      - record timestep
 
-Maintains two covariance streams per object:
-  - baseline_cov: always receives measurement updates (no outages)
-  - degraded_cov: subject to outage windows (actual tracking conditions)
+Maintains two KnowledgeStream instances per simulation:
+  - reference_stream: always receives measurement updates (no outages)
+  - degraded_stream: subject to outage windows (actual tracking conditions)
 """
 
 from __future__ import annotations
@@ -24,7 +24,8 @@ import numpy as np
 
 from stresslab.types import (
     SimulationConfig,
-    ShiroState,
+    IntegrityV1State,
+    KnowledgeStream,
     TimeStep,
     CovarianceResult,
     MeasurementResult,
@@ -43,6 +44,28 @@ from stresslab.modules.geometry_metrics import compute_geometry
 from stresslab.modules.risk_model import compute_risk
 from stresslab.modules.decision_layer import evaluate_decision
 from stresslab.modules.logging_engine import LoggingEngine
+
+
+def _propagate_stream(
+    stream: KnowledgeStream,
+    stm_obj1: np.ndarray,
+    stm_obj2: np.ndarray,
+    state1: np.ndarray,
+    state2: np.ndarray,
+    process_noise,
+    dt: float,
+) -> None:
+    """Propagate both covariances in a KnowledgeStream (in-place)."""
+    stream.cov_obj1 = propagate_covariance(
+        stream.cov_obj1, stm_obj1,
+        state1[:3], state1[3:6],
+        process_noise, dt,
+    )
+    stream.cov_obj2 = propagate_covariance(
+        stream.cov_obj2, stm_obj2,
+        state2[:3], state2[3:6],
+        process_noise, dt,
+    )
 
 
 def run_simulation(
@@ -75,22 +98,18 @@ def run_simulation(
     state1 = config.state_obj1.copy()
     state2 = config.state_obj2.copy()
 
-    # Two covariance streams per object
-    cov_baseline_1 = config.cov_obj1.copy()
-    cov_baseline_2 = config.cov_obj2.copy()
-    cov_degraded_1 = config.cov_obj1.copy()
-    cov_degraded_2 = config.cov_obj2.copy()
-
-    # Tracking
-    prev_trace_1 = np.trace(cov_degraded_1)
-    prev_trace_2 = np.trace(cov_degraded_2)
-    last_update_time_1 = config.t_start
-    last_update_time_2 = config.t_start
+    # Two knowledge streams
+    reference_stream = KnowledgeStream.from_initial(
+        config.cov_obj1, config.cov_obj2, config.t_start,
+    )
+    degraded_stream = KnowledgeStream.from_initial(
+        config.cov_obj1, config.cov_obj2, config.t_start,
+    )
 
     # Decision state
-    baseline_trigger: Optional[float] = None
-    shiro_trigger: Optional[float] = None
-    shiro_state = ShiroState.MONITOR
+    threshold_v1_trigger: Optional[float] = None
+    integrity_v1_trigger: Optional[float] = None
+    integrity_v1_state = IntegrityV1State.MONITOR
 
     logger = LoggingEngine()
 
@@ -109,71 +128,69 @@ def run_simulation(
         t_now = t + dt
 
         # ---- 2. Covariance prediction ----
-        # Baseline (always updated)
-        cov_baseline_1 = propagate_covariance(
-            cov_baseline_1, prop.stm_obj1,
-            state1[:3], state1[3:6],
-            config.process_noise, dt,
+        _propagate_stream(
+            reference_stream, prop.stm_obj1, prop.stm_obj2,
+            state1, state2, config.process_noise, dt,
         )
-        cov_baseline_2 = propagate_covariance(
-            cov_baseline_2, prop.stm_obj2,
-            state2[:3], state2[3:6],
-            config.process_noise, dt,
-        )
-        # Degraded (subject to outages)
-        cov_degraded_1 = propagate_covariance(
-            cov_degraded_1, prop.stm_obj1,
-            state1[:3], state1[3:6],
-            config.process_noise, dt,
-        )
-        cov_degraded_2 = propagate_covariance(
-            cov_degraded_2, prop.stm_obj2,
-            state2[:3], state2[3:6],
-            config.process_noise, dt,
+        _propagate_stream(
+            degraded_stream, prop.stm_obj1, prop.stm_obj2,
+            state1, state2, config.process_noise, dt,
         )
 
         # ---- 3. Measurement model ----
-        meas1 = evaluate_measurement(t_now, last_update_time_1, config.measurement)
-        meas2 = evaluate_measurement(t_now, last_update_time_2, config.measurement)
+        meas1 = evaluate_measurement(
+            t_now, degraded_stream.last_update_time_obj1, config.measurement,
+        )
+        meas2 = evaluate_measurement(
+            t_now, degraded_stream.last_update_time_obj2, config.measurement,
+        )
 
         # ---- 4. Measurement updates ----
-        # Baseline always gets updates when interval is met (ignore outages)
-        time_since_1 = t_now - last_update_time_1
+        # Reference always gets updates when interval is met (ignore outages)
+        time_since_1 = t_now - degraded_stream.last_update_time_obj1
         interval_met_1 = time_since_1 >= config.measurement.update_interval
-        time_since_2 = t_now - last_update_time_2
+        time_since_2 = t_now - degraded_stream.last_update_time_obj2
         interval_met_2 = time_since_2 >= config.measurement.update_interval
 
         if interval_met_1:
-            cov_baseline_1 = measurement_update(
-                cov_baseline_1, config.measurement.noise_sigma_pos,
+            reference_stream.cov_obj1 = measurement_update(
+                reference_stream.cov_obj1, config.measurement.noise_sigma_pos,
             )
         if interval_met_2:
-            cov_baseline_2 = measurement_update(
-                cov_baseline_2, config.measurement.noise_sigma_pos,
+            reference_stream.cov_obj2 = measurement_update(
+                reference_stream.cov_obj2, config.measurement.noise_sigma_pos,
             )
 
         # Degraded only gets updates if not in outage
         if meas1.applied:
-            cov_degraded_1 = measurement_update(
-                cov_degraded_1, config.measurement.noise_sigma_pos,
+            degraded_stream.cov_obj1 = measurement_update(
+                degraded_stream.cov_obj1, config.measurement.noise_sigma_pos,
             )
-            last_update_time_1 = t_now
+            degraded_stream.last_update_time_obj1 = t_now
         if meas2.applied:
-            cov_degraded_2 = measurement_update(
-                cov_degraded_2, config.measurement.noise_sigma_pos,
+            degraded_stream.cov_obj2 = measurement_update(
+                degraded_stream.cov_obj2, config.measurement.noise_sigma_pos,
             )
-            last_update_time_2 = t_now
+            degraded_stream.last_update_time_obj2 = t_now
 
         # ---- Maneuver injection ----
         if config.maneuver.enabled and abs(t_now - config.maneuver.execution_time) < dt:
-            cov_degraded_1 = inject_maneuver(cov_degraded_1, config.maneuver.delta_v_sigma)
-            cov_baseline_1 = inject_maneuver(cov_baseline_1, config.maneuver.delta_v_sigma)
+            degraded_stream.cov_obj1 = inject_maneuver(
+                degraded_stream.cov_obj1, config.maneuver.delta_v_sigma,
+            )
+            reference_stream.cov_obj1 = inject_maneuver(
+                reference_stream.cov_obj1, config.maneuver.delta_v_sigma,
+            )
 
-        # ---- 5. Covariance metrics ----
-        cov_result_1 = covariance_metrics(cov_degraded_1, prev_trace_1, dt)
-        cov_result_2 = covariance_metrics(cov_degraded_2, prev_trace_2, dt)
-        prev_trace_1 = cov_result_1.trace
-        prev_trace_2 = cov_result_2.trace
+        # ---- 5. Covariance metrics (from degraded stream) ----
+        cov_result_1 = covariance_metrics(
+            degraded_stream.cov_obj1, degraded_stream.prev_trace_obj1, dt,
+        )
+        cov_result_2 = covariance_metrics(
+            degraded_stream.cov_obj2, degraded_stream.prev_trace_obj2, dt,
+        )
+        degraded_stream.prev_trace_obj1 = cov_result_1.trace
+        degraded_stream.prev_trace_obj2 = cov_result_2.trace
 
         # ---- 6. Geometry ----
         geom = compute_geometry(prop.rel_position, prop.rel_velocity, prop.estimated_tca)
@@ -181,14 +198,13 @@ def run_simulation(
         # ---- 7. Risk ----
         risk = compute_risk(
             prop.rel_position,
-            cov_baseline_1, cov_baseline_2,
-            cov_degraded_1, cov_degraded_2,
+            reference_stream.cov_obj1, reference_stream.cov_obj2,
+            degraded_stream.cov_obj1, degraded_stream.cov_obj2,
             geom.b_plane_eta, geom.b_plane_zeta,
             config.combined_hard_body_radius,
         )
 
         # ---- 8. Decision ----
-        # Use max staleness and combined covariance metrics
         max_staleness = max(meas1.time_since_last_update, meas2.time_since_last_update)
         combined_cov_norm = cov_result_1.trace + cov_result_2.trace
         combined_growth = cov_result_1.growth_rate + cov_result_2.growth_rate
@@ -201,15 +217,15 @@ def run_simulation(
             growth_rate=combined_growth,
             staleness=max_staleness,
             current_time=t_now,
-            baseline_config=config.baseline,
-            shiro_config=config.shiro,
-            prev_baseline_trigger=baseline_trigger,
-            prev_shiro_trigger=shiro_trigger,
-            prev_shiro_state=shiro_state,
+            threshold_v1_config=config.threshold_v1,
+            integrity_v1_config=config.integrity_v1,
+            prev_threshold_v1_trigger=threshold_v1_trigger,
+            prev_integrity_v1_trigger=integrity_v1_trigger,
+            prev_integrity_v1_state=integrity_v1_state,
         )
-        baseline_trigger = decision.baseline_trigger_time
-        shiro_trigger = decision.shiro_trigger_time
-        shiro_state = decision.shiro_state
+        threshold_v1_trigger = decision.threshold_v1_trigger_time
+        integrity_v1_trigger = decision.integrity_v1_trigger_time
+        integrity_v1_state = decision.integrity_v1_state
 
         # ---- 9. Logging ----
         step = TimeStep(
@@ -227,20 +243,20 @@ def run_simulation(
 
         if verbose and (i + 1) % 100 == 0:
             print(f"  t={t_now:.0f}s | miss={geom.miss_distance:.4f}km | "
-                  f"Pc={risk.pc_degraded:.2e} | SHIRO={shiro_state.value}")
+                  f"Pc={risk.pc_degraded:.2e} | integrity_v1={integrity_v1_state.value}")
 
     # ---- Write outputs ----
     result = {
         "logger": logger,
         "run_id": run_id,
-        "baseline_trigger_time": baseline_trigger,
-        "shiro_trigger_time": shiro_trigger,
+        "threshold_v1_trigger_time": threshold_v1_trigger,
+        "integrity_v1_trigger_time": integrity_v1_trigger,
     }
 
     if output_dir is not None:
         ts_path = logger.write_timeseries(output_dir, run_id)
         sum_path = logger.write_summary(
-            output_dir, run_id, config, baseline_trigger, shiro_trigger,
+            output_dir, run_id, config, threshold_v1_trigger, integrity_v1_trigger,
         )
         result["timeseries_path"] = ts_path
         result["summary_path"] = sum_path
@@ -249,9 +265,9 @@ def run_simulation(
 
     if verbose:
         dcw = None
-        if baseline_trigger and shiro_trigger:
-            dcw = baseline_trigger - shiro_trigger
-        print(f"[StressLAB] Done. Baseline trigger: {baseline_trigger}, "
-              f"SHIRO trigger: {shiro_trigger}, DCW: {dcw}")
+        if threshold_v1_trigger and integrity_v1_trigger:
+            dcw = threshold_v1_trigger - integrity_v1_trigger
+        print(f"[StressLAB] Done. Threshold-v1 trigger: {threshold_v1_trigger}, "
+              f"Integrity-v1 trigger: {integrity_v1_trigger}, DCW: {dcw}")
 
     return result

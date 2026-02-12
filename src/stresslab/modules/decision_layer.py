@@ -1,8 +1,8 @@
-"""Decision Layer - baseline threshold and SHIRO confidence-integrity models.
+"""Decision Layer - threshold-v1 and integrity-v1 decision models.
 
 Evaluates two decision posture models side-by-side at each timestep:
-  1. Baseline: simple threshold on Pc and optionally miss distance
-  2. SHIRO: weighted score of Pc, covariance norm, growth rate, staleness
+  1. Threshold-v1: simple threshold on Pc and optionally miss distance
+  2. Integrity-v1: weighted score of Pc, covariance norm, growth rate, staleness
      mapped to a four-state escalation model (Monitor -> Watch -> Warning -> Critical)
 """
 
@@ -14,26 +14,26 @@ import numpy as np
 
 from stresslab.types import (
     AlertState,
-    ShiroState,
-    BaselineThresholdConfig,
-    ShiroConfig,
+    IntegrityV1State,
+    ThresholdV1Config,
+    IntegrityV1Config,
     DecisionResult,
 )
 
 
 # ---------------------------------------------------------------------------
-# Baseline threshold model
+# Threshold-v1 model
 # ---------------------------------------------------------------------------
 
-def evaluate_baseline(
+def evaluate_threshold_v1(
     pc: float,
     miss_distance: float,
     time_to_tca: float,
-    config: BaselineThresholdConfig,
+    config: ThresholdV1Config,
     current_time: float,
     prev_trigger_time: Optional[float],
 ) -> tuple[AlertState, Optional[float]]:
-    """Evaluate baseline threshold model.
+    """Evaluate threshold-v1 decision model.
 
     Triggers Alert if:
       - Pc >= pc_threshold
@@ -63,15 +63,15 @@ def evaluate_baseline(
 
 
 # ---------------------------------------------------------------------------
-# SHIRO confidence-integrity model
+# Integrity-v1 model
 # ---------------------------------------------------------------------------
 
-def _compute_shiro_score(
+def _compute_integrity_v1_score(
     pc: float,
     cov_norm: float,
     growth_rate: float,
     staleness: float,
-    config: ShiroConfig,
+    config: IntegrityV1Config,
 ) -> float:
     """Compute weighted integrity score.
 
@@ -90,39 +90,39 @@ def _compute_shiro_score(
     return float(np.dot(w, terms))
 
 
-def _score_to_state(score: float, config: ShiroConfig) -> ShiroState:
-    """Map score to SHIRO state."""
+def _score_to_state(score: float, config: IntegrityV1Config) -> IntegrityV1State:
+    """Map score to integrity-v1 state."""
     if score >= config.threshold_warning_to_critical:
-        return ShiroState.CRITICAL
+        return IntegrityV1State.CRITICAL
     elif score >= config.threshold_watch_to_warning:
-        return ShiroState.WARNING
+        return IntegrityV1State.WARNING
     elif score >= config.threshold_monitor_to_watch:
-        return ShiroState.WATCH
+        return IntegrityV1State.WATCH
     else:
-        return ShiroState.MONITOR
+        return IntegrityV1State.MONITOR
 
 
-def evaluate_shiro(
+def evaluate_integrity_v1(
     pc: float,
     cov_norm: float,
     growth_rate: float,
     staleness: float,
-    config: ShiroConfig,
+    config: IntegrityV1Config,
     current_time: float,
     prev_trigger_time: Optional[float],
-    prev_state: ShiroState,
-) -> tuple[ShiroState, float, Optional[float]]:
-    """Evaluate SHIRO confidence-integrity model.
+    prev_state: IntegrityV1State,
+) -> tuple[IntegrityV1State, float, Optional[float]]:
+    """Evaluate integrity-v1 decision model.
 
     Returns:
         (new_state, score, trigger_time)
         trigger_time is set when state first reaches Warning or Critical.
     """
-    score = _compute_shiro_score(pc, cov_norm, growth_rate, staleness, config)
+    score = _compute_integrity_v1_score(pc, cov_norm, growth_rate, staleness, config)
     new_state = _score_to_state(score, config)
 
     trigger_time = prev_trigger_time
-    if new_state in (ShiroState.WARNING, ShiroState.CRITICAL):
+    if new_state in (IntegrityV1State.WARNING, IntegrityV1State.CRITICAL):
         if trigger_time is None:
             trigger_time = current_time
 
@@ -141,28 +141,28 @@ def evaluate_decision(
     growth_rate: float,
     staleness: float,
     current_time: float,
-    baseline_config: BaselineThresholdConfig,
-    shiro_config: ShiroConfig,
-    prev_baseline_trigger: Optional[float],
-    prev_shiro_trigger: Optional[float],
-    prev_shiro_state: ShiroState,
+    threshold_v1_config: ThresholdV1Config,
+    integrity_v1_config: IntegrityV1Config,
+    prev_threshold_v1_trigger: Optional[float],
+    prev_integrity_v1_trigger: Optional[float],
+    prev_integrity_v1_state: IntegrityV1State,
 ) -> DecisionResult:
     """Run both decision models and return combined result."""
-    baseline_alert, baseline_trigger = evaluate_baseline(
+    threshold_v1_alert, threshold_v1_trigger = evaluate_threshold_v1(
         pc, miss_distance, time_to_tca,
-        baseline_config, current_time, prev_baseline_trigger,
+        threshold_v1_config, current_time, prev_threshold_v1_trigger,
     )
 
-    shiro_state, shiro_score, shiro_trigger = evaluate_shiro(
+    integrity_v1_state, integrity_v1_score, integrity_v1_trigger = evaluate_integrity_v1(
         pc, cov_norm, growth_rate, staleness,
-        shiro_config, current_time, prev_shiro_trigger,
-        prev_shiro_state,
+        integrity_v1_config, current_time, prev_integrity_v1_trigger,
+        prev_integrity_v1_state,
     )
 
     return DecisionResult(
-        baseline_alert=baseline_alert,
-        baseline_trigger_time=baseline_trigger,
-        shiro_state=shiro_state,
-        shiro_trigger_time=shiro_trigger,
-        shiro_score=shiro_score,
+        threshold_v1_alert=threshold_v1_alert,
+        threshold_v1_trigger_time=threshold_v1_trigger,
+        integrity_v1_state=integrity_v1_state,
+        integrity_v1_trigger_time=integrity_v1_trigger,
+        integrity_v1_score=integrity_v1_score,
     )

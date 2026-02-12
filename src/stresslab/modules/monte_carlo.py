@@ -2,7 +2,7 @@
 
 Executes N simulation runs with randomized parameters (initial conditions,
 outage patterns, process noise scales) and aggregates results for
-comparison between baseline and SHIRO decision models.
+comparison between threshold-v1 and integrity-v1 decision models.
 """
 
 from __future__ import annotations
@@ -135,8 +135,8 @@ def run_monte_carlo(
                 "process_noise_scale": cfg.process_noise.scale,
                 "total_outage_duration": total_outage_time,
                 "n_outage_windows": len(cfg.measurement.outage_windows),
-                "baseline_trigger_time": run_result["baseline_trigger_time"],
-                "shiro_trigger_time": run_result["shiro_trigger_time"],
+                "threshold_v1_trigger_time": run_result["threshold_v1_trigger_time"],
+                "integrity_v1_trigger_time": run_result["integrity_v1_trigger_time"],
                 "max_pc_degraded": float(df["pc_degraded"].max()),
                 "max_cov_trace": float(df["cov_trace_obj1"].max()),
                 "max_staleness": float(df["staleness_obj1"].max()),
@@ -145,8 +145,8 @@ def run_monte_carlo(
             }
 
             # Decision compression window
-            bt = run_result["baseline_trigger_time"]
-            st = run_result["shiro_trigger_time"]
+            bt = run_result["threshold_v1_trigger_time"]
+            st = run_result["integrity_v1_trigger_time"]
             row["decision_compression_window"] = (
                 bt - st if bt is not None and st is not None else None
             )
@@ -199,18 +199,18 @@ def _compute_aggregate_stats(df: pd.DataFrame) -> dict:
         return stats
 
     # Trigger timing
-    bl_triggers = good["baseline_trigger_time"].dropna()
-    sh_triggers = good["shiro_trigger_time"].dropna()
+    tv1_triggers = good["threshold_v1_trigger_time"].dropna()
+    iv1_triggers = good["integrity_v1_trigger_time"].dropna()
 
-    stats["baseline_trigger"] = {
-        "triggered_count": int(len(bl_triggers)),
-        "mean": float(bl_triggers.mean()) if len(bl_triggers) > 0 else None,
-        "std": float(bl_triggers.std()) if len(bl_triggers) > 0 else None,
+    stats["threshold_v1_trigger"] = {
+        "triggered_count": int(len(tv1_triggers)),
+        "mean": float(tv1_triggers.mean()) if len(tv1_triggers) > 0 else None,
+        "std": float(tv1_triggers.std()) if len(tv1_triggers) > 0 else None,
     }
-    stats["shiro_trigger"] = {
-        "triggered_count": int(len(sh_triggers)),
-        "mean": float(sh_triggers.mean()) if len(sh_triggers) > 0 else None,
-        "std": float(sh_triggers.std()) if len(sh_triggers) > 0 else None,
+    stats["integrity_v1_trigger"] = {
+        "triggered_count": int(len(iv1_triggers)),
+        "mean": float(iv1_triggers.mean()) if len(iv1_triggers) > 0 else None,
+        "std": float(iv1_triggers.std()) if len(iv1_triggers) > 0 else None,
     }
 
     # DCW

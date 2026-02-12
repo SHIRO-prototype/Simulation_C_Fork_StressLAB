@@ -33,13 +33,13 @@ class DynamicsModel(str, Enum):
 
 
 class AlertState(str, Enum):
-    """Baseline model alert states."""
+    """Threshold-v1 decision model alert states."""
     SAFE = "Safe"
     ALERT = "Alert"
 
 
-class ShiroState(str, Enum):
-    """SHIRO confidence-integrity model states."""
+class IntegrityV1State(str, Enum):
+    """Integrity-v1 decision model states."""
     MONITOR = "Monitor"
     WATCH = "Watch"
     WARNING = "Warning"
@@ -106,19 +106,19 @@ class GeometryResult:
 @dataclass
 class RiskResult:
     """Output of collision probability computation."""
-    pc_baseline: float  # Pc with nominal covariance
+    pc_reference: float  # Pc with nominal (reference) covariance
     pc_degraded: float  # Pc with degraded (outage-affected) covariance
-    risk_ratio: float  # pc_degraded / max(pc_baseline, 1e-30)
+    risk_ratio: float  # pc_degraded / max(pc_reference, 1e-30)
 
 
 @dataclass
 class DecisionResult:
     """Output of the decision layer at one timestep."""
-    baseline_alert: AlertState
-    baseline_trigger_time: Optional[float]
-    shiro_state: ShiroState
-    shiro_trigger_time: Optional[float]
-    shiro_score: float
+    threshold_v1_alert: AlertState
+    threshold_v1_trigger_time: Optional[float]
+    integrity_v1_state: IntegrityV1State
+    integrity_v1_trigger_time: Optional[float]
+    integrity_v1_score: float
 
 
 @dataclass
@@ -133,6 +133,53 @@ class TimeStep:
     geometry: GeometryResult
     risk: RiskResult
     decision: DecisionResult
+
+
+@dataclass
+class KnowledgeStream:
+    """Encapsulates covariance tracking state for one knowledge stream.
+
+    A knowledge stream pairs per-object covariance matrices with
+    derived metrics (norm, growth rate) and staleness tracking.
+    Two streams run in parallel during simulation:
+      - reference_stream: always receives measurement updates (no outages)
+      - degraded_stream: subject to outage windows (actual tracking)
+    """
+    cov_obj1: np.ndarray        # (6,6) ECI covariance for object 1
+    cov_obj2: np.ndarray        # (6,6) ECI covariance for object 2
+    last_update_time_obj1: float  # seconds from epoch
+    last_update_time_obj2: float  # seconds from epoch
+    prev_trace_obj1: float      # previous trace for growth rate computation
+    prev_trace_obj2: float      # previous trace for growth rate computation
+
+    @classmethod
+    def from_initial(
+        cls,
+        cov_obj1: np.ndarray,
+        cov_obj2: np.ndarray,
+        t_start: float,
+    ) -> "KnowledgeStream":
+        """Create a KnowledgeStream from initial covariances."""
+        return cls(
+            cov_obj1=cov_obj1.copy(),
+            cov_obj2=cov_obj2.copy(),
+            last_update_time_obj1=t_start,
+            last_update_time_obj2=t_start,
+            prev_trace_obj1=float(np.trace(cov_obj1)),
+            prev_trace_obj2=float(np.trace(cov_obj2)),
+        )
+
+    @property
+    def cov_norm(self) -> float:
+        """Combined covariance norm (sum of traces)."""
+        return float(np.trace(self.cov_obj1) + np.trace(self.cov_obj2))
+
+    def staleness(self, t_now: float) -> float:
+        """Max staleness across both objects at time t_now."""
+        return max(
+            t_now - self.last_update_time_obj1,
+            t_now - self.last_update_time_obj2,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -174,16 +221,16 @@ class ManeuverConfig:
 
 
 @dataclass
-class BaselineThresholdConfig:
-    """Baseline decision model parameters."""
+class ThresholdV1Config:
+    """Threshold-v1 decision model parameters."""
     pc_threshold: float = 1e-4
     miss_distance_threshold: Optional[float] = None  # km
     time_to_tca_gate: float = 86400.0  # seconds (trigger only within this)
 
 
 @dataclass
-class ShiroConfig:
-    """SHIRO confidence-integrity model parameters."""
+class IntegrityV1Config:
+    """Integrity-v1 decision model parameters."""
     weights: np.ndarray = field(
         default_factory=lambda: np.array([0.4, 0.2, 0.2, 0.2])
     )  # [w_pc, w_cov_norm, w_growth_rate, w_staleness]
@@ -217,8 +264,8 @@ class SimulationConfig:
     maneuver: ManeuverConfig = field(default_factory=ManeuverConfig)
 
     # Decision
-    baseline: BaselineThresholdConfig = field(default_factory=BaselineThresholdConfig)
-    shiro: ShiroConfig = field(default_factory=ShiroConfig)
+    threshold_v1: ThresholdV1Config = field(default_factory=ThresholdV1Config)
+    integrity_v1: IntegrityV1Config = field(default_factory=IntegrityV1Config)
 
     # Timeline
     t_start: float = 0.0

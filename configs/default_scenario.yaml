@@ -26,11 +26,11 @@ process_noise:
 risk:
   combined_hard_body_radius: 0.02  # km (20 m)
 
-baseline_decision:
+threshold_v1_decision:
   pc_threshold: 1.0e-4
   time_to_tca_gate: 86400.0  # 1 day
 
-shiro_decision:
+integrity_v1_decision:
   weights: [0.4, 0.2, 0.2, 0.2]
   threshold_monitor_to_watch: 0.25
   threshold_watch_to_warning: 0.50
