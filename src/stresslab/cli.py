@@ -21,7 +21,14 @@ from stresslab.types import DynamicsModel
 # ---------------------------------------------------------------------------
 
 def _load_config_yaml(path: Path):
-    """Load a YAML scenario file and return a SimulationConfig."""
+    """Load a YAML scenario file and return (SimulationConfig, scenario_metadata).
+
+    The ``scenario_metadata`` dict is presentation-only and must NOT affect
+    the SimulationConfig hash / run_id.  It is extracted from the optional
+    ``scenario_metadata`` YAML section and contains:
+      run_label, scenario_title, scenario_purpose, scenario_takeaway, tags
+    If the section is absent, ``None`` is returned for scenario_metadata.
+    """
     import yaml
     import numpy as np
     from stresslab.types import (
@@ -31,6 +38,18 @@ def _load_config_yaml(path: Path):
 
     with open(path) as f:
         raw = yaml.safe_load(f)
+
+    # Extract presentation-only scenario metadata (does NOT affect run_id)
+    sm_raw = raw.get("scenario_metadata")
+    scenario_metadata = None
+    if sm_raw and isinstance(sm_raw, dict):
+        scenario_metadata = {
+            "run_label": sm_raw.get("run_label"),
+            "scenario_title": sm_raw.get("scenario_title"),
+            "scenario_purpose": sm_raw.get("scenario_purpose"),
+            "scenario_takeaway": sm_raw.get("scenario_takeaway"),
+            "tags": sm_raw.get("tags", []),
+        }
 
     # Build sub-configs from YAML sections
     pn_raw = raw.get("process_noise", {})
@@ -95,7 +114,7 @@ def _load_config_yaml(path: Path):
     config.t_start = tl.get("t_start", 0.0)
     config.combined_hard_body_radius = risk.get("combined_hard_body_radius", 0.02)
 
-    return config
+    return config, scenario_metadata
 
 
 # ---------------------------------------------------------------------------
@@ -238,8 +257,9 @@ def run(config_path, seed, miss_distance, t_end, dt, dynamics, output_dir,
     """Run a single conjunction stress-test simulation."""
     output = Path(output_dir)
 
+    scenario_metadata = None
     if config_path:
-        config = _load_config_yaml(Path(config_path))
+        config, scenario_metadata = _load_config_yaml(Path(config_path))
     else:
         config = generate_default_scenario(
             seed=seed,
@@ -277,6 +297,7 @@ def run(config_path, seed, miss_distance, t_end, dt, dynamics, output_dir,
             config, output_dir=output, verbose=verbose,
             progress=progress and not live,
             step_callback=step_callback,
+            scenario_metadata=scenario_metadata,
         )
     finally:
         if panel is not None:
@@ -312,7 +333,7 @@ def monte_carlo(config_path, seed, n_runs, miss_distance, t_end, dt,
     output = Path(output_dir)
 
     if config_path:
-        base_config = _load_config_yaml(Path(config_path))
+        base_config, _metadata = _load_config_yaml(Path(config_path))
     else:
         base_config = generate_default_scenario(
             seed=seed,
@@ -387,7 +408,7 @@ def sweep(param_path, values, config_path, seed, miss_distance, t_end, dt, outpu
 
     # Load base config
     if config_path:
-        base_config = _load_config_yaml(Path(config_path))
+        base_config, _metadata = _load_config_yaml(Path(config_path))
     else:
         base_config = generate_default_scenario(
             seed=seed, miss_distance_km=miss_distance, t_end=t_end, dt=dt,

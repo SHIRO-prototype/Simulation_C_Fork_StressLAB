@@ -357,7 +357,7 @@ class TestYAMLConfigLoading:
         cfg_path = Path(__file__).parent.parent / "configs" / "default_scenario.yaml"
         if not cfg_path.exists():
             pytest.skip("default_scenario.yaml not found")
-        cfg = _load_config_yaml(cfg_path)
+        cfg, _metadata = _load_config_yaml(cfg_path)
         assert isinstance(cfg, SimulationConfig)
         assert cfg.state_obj1.shape == (6,)
         assert cfg.cov_obj1.shape == (6, 6)
@@ -369,7 +369,7 @@ class TestYAMLConfigLoading:
         cfg_path = Path(__file__).parent.parent / "configs" / "default_scenario.yaml"
         if not cfg_path.exists():
             pytest.skip("default_scenario.yaml not found")
-        cfg = _load_config_yaml(cfg_path)
+        cfg, _metadata = _load_config_yaml(cfg_path)
         assert len(cfg.measurement.outage_windows) == 1
         assert cfg.measurement.outage_windows[0]["start"] == 77760.0
 
@@ -402,7 +402,7 @@ class TestYAMLConfigLoading:
         yaml_file = tmp_path / "custom.yaml"
         yaml_file.write_text(yaml_content)
 
-        cfg = _load_config_yaml(yaml_file)
+        cfg, _metadata = _load_config_yaml(yaml_file)
         assert cfg.dt == 120.0
         assert cfg.t_end == 86400.0
         assert cfg.measurement.update_interval == 1800.0
@@ -415,7 +415,7 @@ class TestYAMLConfigLoading:
         yaml_file = tmp_path / "minimal.yaml"
         yaml_file.write_text("seed: 99\n")
 
-        cfg = _load_config_yaml(yaml_file)
+        cfg, _metadata = _load_config_yaml(yaml_file)
         assert isinstance(cfg, SimulationConfig)
         assert cfg.seed == 99
         assert cfg.dt == 60.0  # default

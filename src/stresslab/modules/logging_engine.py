@@ -358,8 +358,16 @@ class LoggingEngine:
         config: SimulationConfig,
         threshold_v1_trigger_time: Optional[float],
         integrity_v1_trigger_time: Optional[float],
+        scenario_metadata: Optional[dict] = None,
     ) -> Path:
-        """Write run summary to JSON."""
+        """Write run summary to JSON.
+
+        Args:
+            scenario_metadata: optional presentation-only metadata dict with
+                run_label, scenario_title, scenario_purpose, scenario_takeaway,
+                tags.  These are embedded in the JSON but do not affect
+                simulation results or run_id.
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
 
         metrics = self.compute_summary(
@@ -370,12 +378,25 @@ class LoggingEngine:
         config_snapshot = self._build_config_snapshot(config)
         story = self._build_story(config, metrics, sanity)
 
+        # Extract scenario metadata fields (default to None / empty list)
+        sm = scenario_metadata or {}
+        run_label = sm.get("run_label")
+        scenario_title = sm.get("scenario_title")
+        scenario_purpose = sm.get("scenario_purpose")
+        scenario_takeaway = sm.get("scenario_takeaway")
+        tags = sm.get("tags", [])
+
         summary = {
             "run_id": run_id,
             "seed": config.seed,
             "schema_version": SCHEMA_VERSION,
             "metrics_contract_version": metrics.contract_version,
             "stresslab_version": STRESSLAB_VERSION,
+            "run_label": run_label,
+            "scenario_title": scenario_title,
+            "scenario_purpose": scenario_purpose,
+            "scenario_takeaway": scenario_takeaway,
+            "tags": tags,
             "threshold_v1_trigger_time": metrics.threshold_v1_trigger_time,
             "integrity_v1_trigger_time": metrics.integrity_v1_trigger_time,
             "decision_compression_window": metrics.decision_compression_window,

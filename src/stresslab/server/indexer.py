@@ -79,6 +79,8 @@ class WorkspaceIndexer:
                 if q_lower in r.run_id.lower()
                 or q_lower in (r.path or "").lower()
                 or q_lower in (r.dynamics_model or "").lower()
+                or q_lower in (r.run_label or "").lower()
+                or q_lower in (r.scenario_title or "").lower()
             ]
         return results[:limit]
 
@@ -208,6 +210,9 @@ class WorkspaceIndexer:
             created_at=_iso_mtime(summary_path),
             seed=data.get("seed"),
             dynamics_model=data.get("dynamics_model"),
+            run_label=data.get("run_label"),
+            scenario_title=data.get("scenario_title"),
+            tags=data.get("tags") or [],
             threshold_v1_trigger_time=data.get("threshold_v1_trigger_time"),
             integrity_v1_trigger_time=data.get("integrity_v1_trigger_time"),
             decision_compression_window=data.get("decision_compression_window"),

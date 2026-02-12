@@ -182,6 +182,8 @@ class TestJSONSchemaVersion:
         required_keys = {
             "run_id", "seed",
             "schema_version", "metrics_contract_version", "stresslab_version",
+            "run_label", "scenario_title", "scenario_purpose",
+            "scenario_takeaway", "tags",
             "threshold_v1_trigger_time", "integrity_v1_trigger_time",
             "decision_compression_window",
             "false_safe_rate", "false_alert_rate",

@@ -5,6 +5,13 @@
 # Usage:
 #   stresslab run --config configs/demos/D3_sparse_cadence.yaml --live
 
+scenario_metadata:
+  run_label: D3_sparse_cadence
+  scenario_title: "Sparse Tracking Cadence"
+  scenario_purpose: "Slow decay from 6-hour update intervals without explicit outage"
+  scenario_takeaway: "Low update frequency alone degrades situational awareness over time"
+  tags: [sparse, cadence, 6-hour]
+
 seed: 42
 miss_distance_km: 0.5
 dynamics_model: two_body_plus_J2

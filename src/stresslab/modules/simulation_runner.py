@@ -74,6 +74,7 @@ def run_simulation(
     verbose: bool = False,
     progress: bool = False,
     step_callback=None,
+    scenario_metadata: Optional[dict] = None,
 ) -> dict:
     """Execute a single simulation run.
 
@@ -85,6 +86,9 @@ def run_simulation(
         step_callback: optional callable(dict) invoked after each timestep
             with current simulation values (for live display). Must not
             compute new physics; only reads from the in-memory values.
+        scenario_metadata: optional presentation-only metadata from YAML config.
+            Does not affect simulation results or run_id. Passed through to
+            logging_engine.write_summary() for embedding in the summary JSON.
 
     Returns:
         dict with keys:
@@ -296,6 +300,7 @@ def run_simulation(
         ts_path = logger.write_timeseries(output_dir, run_id)
         sum_path = logger.write_summary(
             output_dir, run_id, config, threshold_v1_trigger, integrity_v1_trigger,
+            scenario_metadata=scenario_metadata,
         )
         result["timeseries_path"] = ts_path
         result["summary_path"] = sum_path

@@ -8,6 +8,7 @@ interface LayoutProps {
 
 const NAV_ITEMS = [
   { to: "/", label: "Runs" },
+  { to: "/demo", label: "Demo" },
   { to: "/sweeps", label: "Sweeps" },
   { to: "/mc", label: "Monte Carlo" },
 ] as const;

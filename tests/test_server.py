@@ -371,3 +371,107 @@ class TestParquetAdapter:
         table = reader.read_all()
         assert table.num_rows == 3
         assert "x" in table.column_names
+
+
+# ---------------------------------------------------------------------------
+# Label fields and scenario metadata tests (Phase 8)
+# ---------------------------------------------------------------------------
+
+class TestRunLabelFields:
+    """Verify that run_label, scenario_title, and tags are surfaced."""
+
+    def test_run_index_has_label_fields(self, client):
+        """RunIndex in /api/runs should have label-related fields."""
+        r = client.get("/api/runs")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] >= 1
+        run = data["runs"][0]
+        # Fields exist (may be null for runs without metadata)
+        assert "run_label" in run
+        assert "scenario_title" in run
+        assert "tags" in run
+        assert isinstance(run["tags"], list)
+
+    def test_summary_has_scenario_metadata_keys(self, client, run_id):
+        """Summary JSON should contain all scenario_metadata fields."""
+        r = client.get(f"/api/runs/{run_id}/summary")
+        assert r.status_code == 200
+        summary = r.json()["summary"]
+        for key in ["run_label", "scenario_title", "scenario_purpose",
+                     "scenario_takeaway", "tags"]:
+            assert key in summary, f"Missing key: {key}"
+
+    def test_tags_is_list_in_summary(self, client, run_id):
+        """Tags field in summary should be a list."""
+        r = client.get(f"/api/runs/{run_id}/summary")
+        summary = r.json()["summary"]
+        assert isinstance(summary["tags"], list)
+
+
+class TestScenarioMetadataInSummary:
+    """Test that scenario_metadata round-trips through write_summary."""
+
+    def test_metadata_embedded_when_provided(self, tmp_path):
+        from stresslab.modules.logging_engine import LoggingEngine
+        from stresslab.types import SimulationConfig
+
+        logger = LoggingEngine()
+        # Need at least one timestep
+        from tests.test_schema_versioning import _make_timestep
+        logger.record(_make_timestep(60.0))
+
+        config = SimulationConfig()
+        metadata = {
+            "run_label": "test_label",
+            "scenario_title": "Test Title",
+            "scenario_purpose": "Testing purpose",
+            "scenario_takeaway": "Testing takeaway",
+            "tags": ["test", "unit"],
+        }
+        path = logger.write_summary(
+            tmp_path, "test_run", config, None, None,
+            scenario_metadata=metadata,
+        )
+        data = json.loads(path.read_text())
+        assert data["run_label"] == "test_label"
+        assert data["scenario_title"] == "Test Title"
+        assert data["scenario_purpose"] == "Testing purpose"
+        assert data["scenario_takeaway"] == "Testing takeaway"
+        assert data["tags"] == ["test", "unit"]
+
+    def test_metadata_defaults_when_none(self, tmp_path):
+        from stresslab.modules.logging_engine import LoggingEngine
+        from stresslab.types import SimulationConfig
+
+        logger = LoggingEngine()
+        from tests.test_schema_versioning import _make_timestep
+        logger.record(_make_timestep(60.0))
+
+        config = SimulationConfig()
+        path = logger.write_summary(
+            tmp_path, "test_run", config, None, None,
+        )
+        data = json.loads(path.read_text())
+        assert data["run_label"] is None
+        assert data["scenario_title"] is None
+        assert data["scenario_purpose"] is None
+        assert data["scenario_takeaway"] is None
+        assert data["tags"] == []
+
+
+class TestIndexerLabelSearch:
+    """Test that the indexer can search by run_label and scenario_title."""
+
+    def test_search_by_label_finds_nothing_for_default_run(self, workspace, run_id):
+        """Default scenario has no run_label, so label search should not match."""
+        from stresslab.server.indexer import WorkspaceIndexer
+
+        idx = WorkspaceIndexer(workspace)
+        idx.reindex()
+        # Search for a label that does not exist
+        runs = idx.list_runs(q="D0_nominal")
+        found_ids = [r.run_id for r in runs]
+        # Our test run was generated without metadata, so should not match
+        assert run_id not in found_ids
+

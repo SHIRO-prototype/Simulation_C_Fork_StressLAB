@@ -53,6 +53,9 @@ class RunIndex(BaseModel):
     created_at: Optional[str] = None
     seed: Optional[int] = None
     dynamics_model: Optional[str] = None
+    run_label: Optional[str] = None
+    scenario_title: Optional[str] = None
+    tags: list[str] = []
     threshold_v1_trigger_time: Optional[float] = None
     integrity_v1_trigger_time: Optional[float] = None
     decision_compression_window: Optional[float] = None

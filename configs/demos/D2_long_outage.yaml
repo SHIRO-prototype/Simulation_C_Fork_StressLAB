@@ -5,6 +5,13 @@
 # Usage:
 #   stresslab run --config configs/demos/D2_long_outage.yaml --live
 
+scenario_metadata:
+  run_label: D2_long_outage
+  scenario_title: "Extended Sensor Outage"
+  scenario_purpose: "Severe degradation from a 12-hour tracking gap"
+  scenario_takeaway: "Prolonged outages drive covariance blow-up and decision timing compression"
+  tags: [outage, severe, 12-hour]
+
 seed: 42
 miss_distance_km: 0.5
 dynamics_model: two_body_plus_J2

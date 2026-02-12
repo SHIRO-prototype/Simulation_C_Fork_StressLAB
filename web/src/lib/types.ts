@@ -37,6 +37,9 @@ export interface RunIndex {
   created_at: string | null;
   seed: number | null;
   dynamics_model: string | null;
+  run_label: string | null;
+  scenario_title: string | null;
+  tags: string[];
   threshold_v1_trigger_time: number | null;
   integrity_v1_trigger_time: number | null;
   decision_compression_window: number | null;

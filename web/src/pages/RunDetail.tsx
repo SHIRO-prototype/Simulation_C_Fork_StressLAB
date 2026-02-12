@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { fetchRunSummary, fetchRunTimeseries, runDownloadUrl } from "../lib/api";
 import type { TimeseriesResponse } from "../lib/types";
 import MetricCard from "../components/MetricCard";
@@ -12,6 +12,7 @@ import InstabilityPlot from "../components/InstabilityPlot";
 import StoryPanel from "../components/StoryPanel";
 import CurrentPostureWidget from "../components/CurrentPostureWidget";
 import ConfidenceGauge from "../components/ConfidenceGauge";
+import CompareToControlPanel from "../components/CompareToControlPanel";
 
 /* ------------------------------------------------------------------ */
 /*  Formatting helpers                                                 */
@@ -173,6 +174,11 @@ export default function RunDetail() {
       {/* ---- Story narrative ---- */}
       <StoryPanel story={s.story as { bullets: string[] } | null | undefined} />
 
+      {/* ---- Compare to control (D0_nominal) ---- */}
+      {runId && (
+        <CompareToControlPanel summary={s} runId={runId} />
+      )}
+
       {/* ---- Metric cards ---- */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <MetricCard
@@ -265,9 +271,28 @@ export default function RunDetail() {
         />
       </div>
 
-      {/* ---- Download buttons ---- */}
+      {/* ---- Download & export buttons ---- */}
       {runId && (
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to={`/runs/${runId}/onepager`}
+            target="_blank"
+            className="inline-flex items-center rounded bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+          >
+            Open One-Pager
+          </Link>
+          <button
+            onClick={() => {
+              const w = window.open(`/runs/${runId}/onepager`, "_blank");
+              if (w) {
+                w.addEventListener("afterprint", () => {});
+                w.onload = () => setTimeout(() => w.print(), 800);
+              }
+            }}
+            className="inline-flex items-center rounded bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            Print to PDF
+          </button>
           <a
             href={runDownloadUrl(runId, `summary_${runId}.json`)}
             download

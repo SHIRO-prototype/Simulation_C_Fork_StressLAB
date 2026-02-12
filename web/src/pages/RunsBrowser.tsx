@@ -18,13 +18,29 @@ import type { RunIndex } from "../lib/types";
 const col = createColumnHelper<RunIndex>();
 
 const columns = [
+  col.accessor("run_label", {
+    header: "Label",
+    cell: (info) => {
+      const label = info.getValue();
+      const runId = info.row.original.run_id;
+      return (
+        <span className="font-semibold text-sm">
+          {label || runId.slice(0, 8)}
+        </span>
+      );
+    },
+  }),
   col.accessor("run_id", {
     header: "Run ID",
     cell: (info) => (
-      <span className="font-mono text-sm">
+      <span className="font-mono text-sm text-gray-500">
         {info.getValue().slice(0, 8)}
       </span>
     ),
+  }),
+  col.accessor("scenario_title", {
+    header: "Scenario",
+    cell: (info) => info.getValue() ?? "---",
   }),
   col.accessor("seed", {
     header: "Seed",
