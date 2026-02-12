@@ -239,10 +239,10 @@ def run_monte_carlo(
 def _compute_aggregate_stats(df: pd.DataFrame) -> dict:
     """Compute aggregate statistics from Monte Carlo results."""
     # Filter successful runs
-    good = df[~df.get("error", pd.Series(dtype=str)).notna() |
-               df.get("error", pd.Series(dtype=str)).isna()]
-    if "error" in good.columns:
-        good = good[good["error"].isna()]
+    if "error" in df.columns:
+        good = df[df["error"].isna()]
+    else:
+        good = df
 
     stats: dict = {
         "total_runs": len(df),

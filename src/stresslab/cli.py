@@ -121,11 +121,23 @@ def _set_config_param(config, param_path: str, value):
     parts = param_path.split(".")
     if parts[0] == "outage" and parts[1] == "duration":
         duration = float(value)
-        # Place a single outage window centered at 1/3 of the timeline
+        # Place a single outage window starting at 15% of the timeline
         start = cfg.t_start + (cfg.t_end - cfg.t_start) * 0.15
         cfg.measurement.outage_windows = [
             {"start": start, "end": start + duration}
         ] if duration > 0 else []
+    elif parts[0] == "outage" and parts[1] == "start":
+        start = float(value)
+        # Set the start of a single outage window, preserving existing duration
+        # or using a default of 6 hours if no window exists yet
+        existing = cfg.measurement.outage_windows
+        if existing and len(existing) > 0:
+            duration = existing[0]["end"] - existing[0]["start"]
+        else:
+            duration = 21600.0  # default 6h
+        cfg.measurement.outage_windows = [
+            {"start": start, "end": start + duration}
+        ] if start >= 0 else []
     elif parts[0] == "process_noise" and len(parts) == 2:
         setattr(cfg.process_noise, parts[1], float(value))
     elif parts[0] == "measurement" and len(parts) == 2:
@@ -137,7 +149,7 @@ def _set_config_param(config, param_path: str, value):
     else:
         raise click.ClickException(
             f"Unknown sweep parameter: {param_path}. "
-            "Supported: outage.duration, process_noise.scale, "
+            "Supported: outage.duration, outage.start, process_noise.scale, "
             "measurement.update_interval, combined_hard_body_radius, dt"
         )
     return cfg
@@ -342,19 +354,20 @@ def monte_carlo(config_path, seed, n_runs, miss_distance, t_end, dt,
 @click.option("--config", "config_path", default=None,
               type=click.Path(exists=True), help="YAML scenario config file")
 @click.option("--seed", default=42, type=int, help="Random seed")
+@click.option("--miss-distance", default=0.5, type=float, help="Target miss distance (km)")
 @click.option("--t-end", default=86400.0, type=float, help="Simulation end time (s)")
 @click.option("--dt", default=120.0, type=float, help="Timestep (s)")
 @click.option("--output-dir", default="outputs/sweep", type=click.Path())
 @click.option("--live", is_flag=True, help="Show Rich live display for each run")
 @click.option("--progress", is_flag=True, help="Show progress")
-def sweep(param_path, values, config_path, seed, t_end, dt, output_dir, live, progress):
+def sweep(param_path, values, config_path, seed, miss_distance, t_end, dt, output_dir, live, progress):
     """Run a controlled parameter sweep.
 
     PARAM_PATH is the dot-separated config path to sweep, e.g. outage.duration
 
     Supported parameters:
-      outage.duration, process_noise.scale, measurement.update_interval,
-      combined_hard_body_radius, dt
+      outage.duration, outage.start, process_noise.scale,
+      measurement.update_interval, combined_hard_body_radius, dt
 
     Example:
       stresslab sweep outage.duration --values 0h,1h,3h,6h,12h --seed 42
@@ -367,7 +380,9 @@ def sweep(param_path, values, config_path, seed, t_end, dt, output_dir, live, pr
     output.mkdir(parents=True, exist_ok=True)
 
     # Parse values
-    raw_values = [v.strip() for v in values.split(",")]
+    raw_values = [v.strip() for v in values.split(",") if v.strip()]
+    if not raw_values:
+        raise click.ClickException("--values must contain at least one non-empty value.")
     parsed_values = [_parse_sweep_value(v) for v in raw_values]
 
     # Load base config
@@ -375,7 +390,7 @@ def sweep(param_path, values, config_path, seed, t_end, dt, output_dir, live, pr
         base_config = _load_config_yaml(Path(config_path))
     else:
         base_config = generate_default_scenario(
-            seed=seed, t_end=t_end, dt=dt,
+            seed=seed, miss_distance_km=miss_distance, t_end=t_end, dt=dt,
         )
 
     # Sweep metadata
@@ -394,7 +409,48 @@ def sweep(param_path, values, config_path, seed, t_end, dt, output_dir, live, pr
 
         run_output = output / f"run_{idx:03d}_{raw_val}"
 
-        result = run_simulation(cfg, output_dir=run_output, verbose=False)
+        # Live panel setup for each sweep run
+        panel = None
+        step_callback = None
+        if live:
+            try:
+                from stresslab.live_panel import LivePanelCallback
+                panel = LivePanelCallback(
+                    run_id=cfg.run_id(),
+                    seed=cfg.seed,
+                    dt=cfg.dt,
+                    t_end=cfg.t_end,
+                    dynamics=cfg.dynamics_model.value,
+                )
+                panel.start()
+                step_callback = panel.on_step
+            except ImportError:
+                click.echo("[WARN] Rich not installed; --live disabled.", err=True)
+                live = False  # Don't retry for subsequent runs
+
+        try:
+            result = run_simulation(
+                cfg, output_dir=run_output, verbose=False,
+                progress=progress and not live,
+                step_callback=step_callback,
+            )
+        except Exception as e:
+            if panel is not None:
+                panel.stop()
+            click.echo(f"  [WARN] Sweep run {idx+1} failed: {e}", err=True)
+            sweep_results.append({
+                "sweep_index": idx,
+                "param_path": param_path,
+                "param_value_raw": raw_val,
+                "param_value": parsed_val,
+                "run_id": None,
+                "seed": seed,
+                "error": str(e),
+            })
+            continue
+        finally:
+            if panel is not None:
+                panel.stop()
 
         # Extract key metrics from logger
         logger = result["logger"]
@@ -458,6 +514,12 @@ def sweep(param_path, values, config_path, seed, t_end, dt, output_dir, live, pr
     ]
     rows = []
     for r in sweep_results:
+        if "error" in r:
+            rows.append([
+                r["param_value_raw"],
+                "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR",
+            ])
+            continue
         rows.append([
             r["param_value_raw"],
             f"{r['threshold_v1_trigger_time']:.0f}s" if r["threshold_v1_trigger_time"] else "---",
@@ -555,10 +617,14 @@ def _report_single_run(json_path: Path, out: Path, fmt_set: set):
         try:
             import pandas as pd
             ts_df = pd.read_parquet(ts_path)
-            from stresslab.plotting import plot_posture_timeline, plot_pc_drift_vs_staleness
+            from stresslab.plotting import (
+                plot_posture_timeline, plot_pc_drift_vs_staleness,
+                plot_decision_instability,
+            )
             plot_posture_timeline(ts_df, out / "posture_timeline_overlay.png")
             plot_pc_drift_vs_staleness(ts_df, out / "pc_drift_vs_staleness.png")
-            click.echo(f"  Generated: posture_timeline_overlay.png, pc_drift_vs_staleness.png")
+            plot_decision_instability(ts_df, out / "decision_instability.png")
+            click.echo(f"  Generated: posture_timeline_overlay.png, pc_drift_vs_staleness.png, decision_instability.png")
         except Exception as e:
             click.echo(f"  [WARN] Plot generation failed: {e}", err=True)
 

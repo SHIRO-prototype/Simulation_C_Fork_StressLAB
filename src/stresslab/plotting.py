@@ -136,12 +136,15 @@ def _draw_state_bands(ax, t_hours, state_series, color_map, alpha=0.25):
     prev_state = state_series[0]
     block_start = t_hours[0]
     for i in range(1, len(state_series)):
-        if state_series[i] != prev_state or i == len(state_series) - 1:
+        if state_series[i] != prev_state:
             end = t_hours[i]
             color = color_map.get(prev_state, "#CCCCCC")
             ax.axvspan(block_start, end, color=color, alpha=alpha)
             block_start = end
             prev_state = state_series[i]
+    # Draw the final block (from block_start to the last time point)
+    color = color_map.get(prev_state, "#CCCCCC")
+    ax.axvspan(block_start, t_hours[-1], color=color, alpha=alpha)
 
 
 def _add_state_legend(ax, color_map, extra_handles=None):

@@ -173,10 +173,12 @@ def run_simulation(
             reference_stream.cov_obj1 = measurement_update(
                 reference_stream.cov_obj1, config.measurement.noise_sigma_pos,
             )
+            reference_stream.last_update_time_obj1 = t_now
         if interval_met_2:
             reference_stream.cov_obj2 = measurement_update(
                 reference_stream.cov_obj2, config.measurement.noise_sigma_pos,
             )
+            reference_stream.last_update_time_obj2 = t_now
 
         # Degraded only gets updates if not in outage
         if meas1.applied:
