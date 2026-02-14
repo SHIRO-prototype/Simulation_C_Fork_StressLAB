@@ -17,7 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from stresslab import __version__ as STRESSLAB_VERSION
-from stresslab.types import (
+from stresslab.stresslab_types import (
     TimeStep,
     AlertState,
     IntegrityV1State,
@@ -79,6 +79,8 @@ class LoggingEngine:
             "threshold_v1_alert_state": step.decision.threshold_v1_alert.value,
             "integrity_v1_state": step.decision.integrity_v1_state.value,
             "integrity_v1_score": step.decision.integrity_v1_score,
+            "shiro_state": step.decision.shiro_state.value if step.decision.shiro_state else None,
+            "shiro_trigger_path": step.decision.shiro_trigger_path,
             "measurement_applied_obj1": step.measurement_obj1.applied,
             "measurement_applied_obj2": step.measurement_obj2.applied,
             "staleness_obj1": step.measurement_obj1.time_since_last_update,

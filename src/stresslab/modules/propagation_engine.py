@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from stresslab.types import (
+from stresslab.stresslab_types import (
     DynamicsModel,
     MU_EARTH_KM3S2,
     RE_EARTH_KM,

@@ -46,6 +46,13 @@ class IntegrityV1State(str, Enum):
     CRITICAL = "Critical"
 
 
+class ShiroState(str, Enum):
+    """SHIRO posture state machine (SAFE -> ELEVATED -> CRITICAL)."""
+    SAFE = "SAFE"
+    ELEVATED = "ELEVATED"
+    CRITICAL = "CRITICAL"
+
+
 # ---------------------------------------------------------------------------
 # Core data containers
 # ---------------------------------------------------------------------------
@@ -119,6 +126,8 @@ class DecisionResult:
     integrity_v1_state: IntegrityV1State
     integrity_v1_trigger_time: Optional[float]
     integrity_v1_score: float
+    shiro_state: Optional["ShiroState"] = None
+    shiro_trigger_path: Optional[str] = None
 
 
 @dataclass
@@ -273,6 +282,25 @@ class ThresholdV1Config:
 
 
 @dataclass
+class ShiroConfig:
+    """SHIRO posture state machine: geometry gating + freshness/sigma elevated triggers."""
+    d_watch_km: float = 8.0  # geometry becomes relevant inside this (m in spec -> km)
+    d_act_km: float = 1.0  # CRITICAL threshold (miss distance)
+    pc_critical: float = 1e-4
+    dt_max_s: float = 3600.0  # staleness >= this -> ELEVATED when geometry relevant
+
+    def __post_init__(self):
+        if self.d_watch_km <= 0 or self.d_act_km <= 0:
+            raise ConfigValidationError("d_watch_km and d_act_km must be > 0")
+        if self.d_act_km > self.d_watch_km:
+            raise ConfigValidationError("d_act_km must be <= d_watch_km")
+        if self.pc_critical <= 0:
+            raise ConfigValidationError("pc_critical must be > 0")
+        if self.dt_max_s <= 0:
+            raise ConfigValidationError("dt_max_s must be > 0")
+
+
+@dataclass
 class IntegrityV1Config:
     """Integrity-v1 decision model parameters."""
     weights: np.ndarray = field(
@@ -332,6 +360,7 @@ class SimulationConfig:
     # Decision
     threshold_v1: ThresholdV1Config = field(default_factory=ThresholdV1Config)
     integrity_v1: IntegrityV1Config = field(default_factory=IntegrityV1Config)
+    shiro: Optional[ShiroConfig] = None
 
     # Timeline
     t_start: float = 0.0
@@ -422,6 +451,16 @@ class SimulationConfig:
                 "growth_rate_ref": self.integrity_v1.growth_rate_ref,
                 "staleness_ref": self.integrity_v1.staleness_ref,
             },
+            "shiro": (
+                {
+                    "d_watch_km": self.shiro.d_watch_km,
+                    "d_act_km": self.shiro.d_act_km,
+                    "pc_critical": self.shiro.pc_critical,
+                    "dt_max_s": self.shiro.dt_max_s,
+                }
+                if self.shiro is not None
+                else None
+            ),
             # Timeline
             "t_start": self.t_start,
             "t_end": self.t_end,

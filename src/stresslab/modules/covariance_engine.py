@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from stresslab.types import (
+from stresslab.stresslab_types import (
     CovarianceResult,
     ProcessNoiseConfig,
     MU_EARTH_KM3S2,

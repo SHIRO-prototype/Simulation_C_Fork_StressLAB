@@ -1,0 +1,98 @@
+# SHIRO Demo: Clean divergence (SHIRO ELEVATED, Baseline SAFE)
+# Force a first-post LinkedIn-worthy divergence:
+#   - Geometry becomes relevant (within watch region)
+#   - Tracking outage overlaps the geometry-relevant window
+#   - Pc stays BELOW baseline critical threshold
+# Result: SHIRO SAFE -> ELEVATED (freshness); Baseline stays SAFE
+
+name: "DEMO_DIVERGENCE__OUTAGE_OVER_GEO__SHIRO_ELEVATED__BASELINE_SAFE"
+purpose: >
+  Force a clean, first-post LinkedIn-worthy divergence:
+  - Geometry becomes relevant (within watch region)
+  - Tracking outage overlaps the geometry-relevant window
+  - Pc stays BELOW baseline critical threshold
+  Result:
+    SHIRO: SAFE -> ELEVATED (freshness/knowledge degradation)
+    Baseline: SAFE (no critical trigger)
+
+scenario:
+  id: "demo_divergence_001"
+  seed: 42
+  dynamics_model: "two_body_plus_J2"
+  duration_hours: 6.0
+  tca_time_hours_from_start: 5.0
+
+encounter_geometry:
+  target_miss_distance_m: 2500    # keep safely above d_act
+  relative_speed_mps: 10000
+  geometry_watch_gate:
+    d_watch_m: 8000
+    d_act_m: 1000
+  notes: >
+    Conjunction enters d_watch in the last ~2h,
+    miss distance above d_act so baseline never goes CRITICAL.
+
+tracking_model:
+  measurement_cadence_s: 900       # 15 min updates
+  measurement_noise:
+    position_sigma_m: 50
+    velocity_sigma_mps: 0.05
+  outages:
+    - name: "late_approach_outage"
+      start_hours_from_start: 3.0
+      end_hours_from_start: 4.8
+  freshness_thresholds:
+    dt_max_s: 3600
+    freshness_min_for_safe: 0.90
+  notes: >
+    Outage 3h–4.8h guarantees SHIRO ELEVATED when geometry gate is true
+    (dt_since_last_update >= 3600s).
+
+process_noise:
+  model: "RTN_piecewise_constant_accel"
+  sigmas_mps2:
+    radial: 1.0e-6
+    tangential: 3.0e-6
+    normal: 1.0e-6
+  global_scale: 1.0
+  regime_scaling:
+    enabled: false
+
+decision_models:
+  baseline:
+    type: "threshold_only"
+    critical_trigger:
+      d_act_m: 1000
+      pc_critical: 1.0e-4
+  shiro:
+    type: "posture_state_machine_v1"
+    states: ["SAFE", "ELEVATED", "CRITICAL"]
+    gating:
+      geometry_relevant_requires:
+        d_watch_m: 8000
+    elevated_triggers:
+      - type: "freshness"
+        dt_since_last_update_gte_s: 3600
+      - type: "sigma_growth_rate"
+        sigma_growth_rate_gte: null
+      - type: "sigma_scalar"
+        sigma_scalar_gte: null
+    critical_trigger:
+      d_act_m: 1000
+      pc_critical: 1.0e-4
+
+expected_outcomes:
+  shiro:
+    elevated: true
+    critical: false
+  baseline:
+    critical: false
+  panel_should_show:
+    - "SHIRO vs Baseline posture timeline is NOT empty"
+    - "SHIRO shows SAFE -> ELEVATED during late_approach_outage"
+    - "Baseline remains SAFE throughout"
+    - "Why payload indicates trigger_path = FRESHNESS (dt_since_last_update >= 3600s)"
+
+run_selection_note: >
+  If the generator cannot directly target miss distance, sweep seed
+  [41, 42, 43, 44, 45] until divergence appears.

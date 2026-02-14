@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from stresslab.types import GeometryResult
+from stresslab.stresslab_types import GeometryResult
 
 
 def compute_geometry(

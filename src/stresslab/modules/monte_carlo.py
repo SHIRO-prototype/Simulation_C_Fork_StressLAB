@@ -14,7 +14,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from stresslab.types import SimulationConfig, MeasurementConfig
+from stresslab.stresslab_types import SimulationConfig, MeasurementConfig
 from stresslab.modules.simulation_runner import run_simulation
 
 

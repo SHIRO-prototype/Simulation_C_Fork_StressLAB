@@ -12,11 +12,13 @@ from typing import Optional
 
 import numpy as np
 
-from stresslab.types import (
+from stresslab.stresslab_types import (
     AlertState,
     IntegrityV1State,
+    ShiroState,
     ThresholdV1Config,
     IntegrityV1Config,
+    ShiroConfig,
     DecisionResult,
 )
 
@@ -130,6 +132,36 @@ def evaluate_integrity_v1(
 
 
 # ---------------------------------------------------------------------------
+# SHIRO posture state machine (SAFE -> ELEVATED -> CRITICAL)
+# ---------------------------------------------------------------------------
+
+def evaluate_shiro(
+    pc: float,
+    miss_distance_km: float,
+    dt_since_last_update_s: float,
+    config: ShiroConfig,
+) -> tuple[ShiroState, Optional[str]]:
+    """Evaluate SHIRO posture: CRITICAL if inside d_act + Pc; ELEVATED if geometry relevant + stale.
+
+    Returns:
+        (shiro_state, trigger_path or None)
+        trigger_path: "CRITICAL" | "FRESHNESS" | "sigma_growth_rate" | "sigma_scalar" | None
+    """
+    # CRITICAL: inside d_act and Pc >= threshold
+    if miss_distance_km <= config.d_act_km and pc >= config.pc_critical:
+        return ShiroState.CRITICAL, "CRITICAL"
+
+    # Geometry relevant = inside watch gate (miss distance within d_watch)
+    geometry_relevant = miss_distance_km <= config.d_watch_km
+
+    # ELEVATED: geometry relevant + freshness breach
+    if geometry_relevant and dt_since_last_update_s >= config.dt_max_s:
+        return ShiroState.ELEVATED, "FRESHNESS"
+
+    return ShiroState.SAFE, None
+
+
+# ---------------------------------------------------------------------------
 # Combined evaluation
 # ---------------------------------------------------------------------------
 
@@ -146,8 +178,9 @@ def evaluate_decision(
     prev_threshold_v1_trigger: Optional[float],
     prev_integrity_v1_trigger: Optional[float],
     prev_integrity_v1_state: IntegrityV1State,
+    shiro_config: Optional[ShiroConfig] = None,
 ) -> DecisionResult:
-    """Run both decision models and return combined result."""
+    """Run both decision models (and optionally SHIRO) and return combined result."""
     threshold_v1_alert, threshold_v1_trigger = evaluate_threshold_v1(
         pc, miss_distance, time_to_tca,
         threshold_v1_config, current_time, prev_threshold_v1_trigger,
@@ -159,10 +192,19 @@ def evaluate_decision(
         prev_integrity_v1_state,
     )
 
+    shiro_state: Optional[ShiroState] = None
+    shiro_trigger_path: Optional[str] = None
+    if shiro_config is not None:
+        shiro_state, shiro_trigger_path = evaluate_shiro(
+            pc, miss_distance, staleness, shiro_config,
+        )
+
     return DecisionResult(
         threshold_v1_alert=threshold_v1_alert,
         threshold_v1_trigger_time=threshold_v1_trigger,
         integrity_v1_state=integrity_v1_state,
         integrity_v1_trigger_time=integrity_v1_trigger,
         integrity_v1_score=integrity_v1_score,
+        shiro_state=shiro_state,
+        shiro_trigger_path=shiro_trigger_path,
     )

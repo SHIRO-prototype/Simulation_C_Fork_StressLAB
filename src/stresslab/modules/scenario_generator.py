@@ -13,7 +13,7 @@ from typing import Optional
 
 import numpy as np
 
-from stresslab.types import (
+from stresslab.stresslab_types import (
     DynamicsModel,
     MeasurementConfig,
     ManeuverConfig,
@@ -61,6 +61,7 @@ def generate_default_scenario(
     t_end: float = 259200.0,
     dt: float = 60.0,
     dynamics: DynamicsModel = DynamicsModel.TWO_BODY_J2,
+    t_tca_frac: float = 0.6,
 ) -> SimulationConfig:
     """Generate a default LEO conjunction scenario.
 
@@ -74,8 +75,7 @@ def generate_default_scenario(
 
     To stress-test the decision models, we reverse this:
     place the objects so they *converge* toward closest approach
-    at approximately t_end * 0.6 (giving the outage window time
-    to degrade the covariance before TCA).
+    at t_tca = t_end * t_tca_frac (default 0.6).
     """
     rng = np.random.default_rng(seed)
 
@@ -89,9 +89,8 @@ def generate_default_scenario(
     vel1_base = np.array([0.0, v_circ, 0.0])
 
     # Object 2: starts offset and converges
-    # At TCA (t_tca = t_end * 0.6), objects should be at miss_distance_km apart
-    # We back-propagate object 2 from the TCA condition
-    t_tca = t_end * 0.6
+    # At TCA (t_tca = t_end * t_tca_frac), objects should be at miss_distance_km apart
+    t_tca = t_end * max(0.01, min(0.99, t_tca_frac))
 
     # Relative velocity at encounter: scale with t_tca to keep
     # initial offset reasonable (~10-50 km)

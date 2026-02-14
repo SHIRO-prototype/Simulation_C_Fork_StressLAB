@@ -48,6 +48,12 @@ _INTEGRITY_V1_COLORS = {
     "Critical": "#F44336",  # red
 }
 
+_SHIRO_COLORS = {
+    "SAFE":     "#4CAF50",  # green
+    "ELEVATED": "#FFC107",  # amber
+    "CRITICAL": "#F44336",  # red
+}
+
 
 def _apply_style():
     """Apply the shared matplotlib rcParams."""
@@ -66,23 +72,29 @@ def _hours(seconds):
 def plot_posture_timeline(ts_df, output_path, title=None):
     """Decision posture timeline overlay for a single simulation run.
 
-    Shows threshold-v1 and integrity-v1 decision states over time as
-    colored bands, with Pc (degraded) and miss distance overlaid.
+    Shows threshold-v1 (Baseline) and integrity-v1 decision states over time;
+    when shiro_state is present, adds SHIRO vs Baseline divergence panel.
 
     Args:
         ts_df: pandas DataFrame from timeseries parquet. Expected columns:
             timestamp, threshold_v1_alert_state, integrity_v1_state,
-            pc_degraded, pc_reference, miss_distance.
+            pc_degraded, pc_reference, miss_distance; optional shiro_state.
         output_path: Path to save the PNG.
         title: Optional plot title override.
     """
     _apply_style()
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+    has_shiro = "shiro_state" in ts_df.columns and ts_df["shiro_state"].notna().any()
+    n_panels = 4 if has_shiro else 3
+    fig, axes = plt.subplots(n_panels, 1, figsize=(14, 4 * n_panels), sharex=True)
+    if n_panels == 3:
+        ax1, ax2, ax3 = axes
+    else:
+        ax1, ax2, ax3, ax4 = axes
     fig.suptitle(title or "Decision Posture Timeline", fontsize=14, fontweight="bold")
 
     t_hours = _hours(ts_df["timestamp"].values)
 
-    # --- Panel 1: Threshold-v1 state bands + Pc ---
+    # --- Panel 1: Baseline (Threshold-v1) state bands + Pc ---
     _draw_state_bands(
         ax1, t_hours, ts_df["threshold_v1_alert_state"].values,
         _THRESHOLD_V1_COLORS, alpha=0.25,
@@ -92,37 +104,48 @@ def plot_posture_timeline(ts_df, output_path, title=None):
     ax1.semilogy(t_hours, ts_df["pc_reference"].values, color="#90CAF9",
                  label="Pc (reference)", linewidth=1.0, linestyle="--")
     ax1.set_ylabel("Collision Probability")
-    ax1.set_title("Threshold-v1 Decision + Collision Probability")
+    ax1.set_title("Baseline (Threshold-v1) + Collision Probability")
     _add_state_legend(ax1, _THRESHOLD_V1_COLORS, extra_handles=ax1.get_legend_handles_labels()[0])
     ax1.set_ylim(bottom=max(ts_df["pc_reference"].min() * 0.1, 1e-30))
 
-    # --- Panel 2: Integrity-v1 state bands + integrity score ---
+    if has_shiro:
+        # --- Panel 2: SHIRO posture (SAFE / ELEVATED / CRITICAL) ---
+        shiro_vals = ts_df["shiro_state"].fillna("SAFE").astype(str).values
+        _draw_state_bands(ax2, t_hours, shiro_vals, _SHIRO_COLORS, alpha=0.25)
+        ax2.set_ylabel("SHIRO State")
+        ax2.set_title("SHIRO Posture (geometry + freshness gating)")
+        _add_state_legend(ax2, _SHIRO_COLORS)
+        ax2_next = ax3
+        ax3_next = ax4
+    else:
+        ax2_next = ax2
+        ax3_next = ax3
+
+    # --- Integrity-v1 state bands + integrity score ---
     _draw_state_bands(
-        ax2, t_hours, ts_df["integrity_v1_state"].values,
+        ax2_next, t_hours, ts_df["integrity_v1_state"].values,
         _INTEGRITY_V1_COLORS, alpha=0.25,
     )
     if "integrity_v1_score" in ts_df.columns:
-        ax2.plot(t_hours, ts_df["integrity_v1_score"].values, color="#6A1B9A",
-                 label="Integrity score", linewidth=1.5)
-    ax2.set_ylabel("Integrity Score")
-    ax2.set_title("Integrity-v1 Decision + Composite Score")
-    _add_state_legend(ax2, _INTEGRITY_V1_COLORS, extra_handles=ax2.get_legend_handles_labels()[0])
+        ax2_next.plot(t_hours, ts_df["integrity_v1_score"].values, color="#6A1B9A",
+                      label="Integrity score", linewidth=1.5)
+    ax2_next.set_ylabel("Integrity Score")
+    ax2_next.set_title("Integrity-v1 Decision + Composite Score")
+    _add_state_legend(ax2_next, _INTEGRITY_V1_COLORS, extra_handles=ax2_next.get_legend_handles_labels()[0])
 
-    # --- Panel 3: Staleness + miss distance ---
-    ax3_twin = ax3.twinx()
-    ax3.plot(t_hours, ts_df["staleness_obj1"].values / 3600.0, color="#E65100",
-             label="Staleness (hours)", linewidth=1.5)
+    # --- Staleness + miss distance ---
+    ax3_twin = ax3_next.twinx()
+    ax3_next.plot(t_hours, ts_df["staleness_obj1"].values / 3600.0, color="#E65100",
+                  label="Staleness (hours)", linewidth=1.5)
     ax3_twin.plot(t_hours, ts_df["miss_distance"].values, color="#0D47A1",
                   label="Miss distance (km)", linewidth=1.0, linestyle="--")
-    ax3.set_xlabel("Time (hours)")
-    ax3.set_ylabel("Staleness (hours)")
+    ax3_next.set_xlabel("Time (hours)")
+    ax3_next.set_ylabel("Staleness (hours)")
     ax3_twin.set_ylabel("Miss Distance (km)")
-    ax3.set_title("Tracking Staleness + Miss Distance")
-
-    # Combined legend
-    lines1, labels1 = ax3.get_legend_handles_labels()
+    ax3_next.set_title("Tracking Staleness + Miss Distance")
+    lines1, labels1 = ax3_next.get_legend_handles_labels()
     lines2, labels2 = ax3_twin.get_legend_handles_labels()
-    ax3.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
+    ax3_next.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
 
     plt.tight_layout()
     fig.savefig(str(output_path), dpi=150, bbox_inches="tight")

@@ -6,7 +6,7 @@ accounting for scheduled update intervals and outage windows.
 
 from __future__ import annotations
 
-from stresslab.types import MeasurementConfig, MeasurementResult
+from stresslab.stresslab_types import MeasurementConfig, MeasurementResult
 
 
 def evaluate_measurement(

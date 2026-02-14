@@ -13,7 +13,7 @@ from stresslab import __version__
 from stresslab.modules.scenario_generator import generate_default_scenario, export_scenario
 from stresslab.modules.simulation_runner import run_simulation
 from stresslab.modules.monte_carlo import run_monte_carlo
-from stresslab.types import DynamicsModel
+from stresslab.stresslab_types import DynamicsModel
 
 
 # ---------------------------------------------------------------------------
@@ -31,9 +31,9 @@ def _load_config_yaml(path: Path):
     """
     import yaml
     import numpy as np
-    from stresslab.types import (
+    from stresslab.stresslab_types import (
         SimulationConfig, ProcessNoiseConfig, MeasurementConfig,
-        ManeuverConfig, ThresholdV1Config, IntegrityV1Config,
+        ManeuverConfig, ThresholdV1Config, IntegrityV1Config, ShiroConfig,
     )
 
     with open(path) as f:
@@ -50,17 +50,52 @@ def _load_config_yaml(path: Path):
             "scenario_takeaway": sm_raw.get("scenario_takeaway"),
             "tags": sm_raw.get("tags", []),
         }
+    # SHIRO demo format: top-level purpose/name for display
+    if scenario_metadata is None and (raw.get("purpose") or raw.get("name")):
+        scenario_metadata = {
+            "run_label": raw.get("name"),
+            "scenario_purpose": raw.get("purpose"),
+            "scenario_title": None,
+            "scenario_takeaway": None,
+            "tags": [],
+        }
 
     # Build sub-configs from YAML sections
     pn_raw = raw.get("process_noise", {})
+    # Support SHIRO demo process_noise.sigmas_mps2 (m/s^2 -> use as scale factors; keep sigma_* in km)
+    sigma_r = pn_raw.get("sigma_radial")
+    sigma_t = pn_raw.get("sigma_tangential")
+    sigma_n = pn_raw.get("sigma_normal")
+    if sigma_r is None and "sigmas_mps2" in pn_raw:
+        s = pn_raw["sigmas_mps2"]
+        # sigma in m/s^2 -> km/s^2 (ProcessNoiseConfig uses km)
+        def mps2_to_kmps2(x):
+            return float(x) * 1e-3
+        sigma_r = mps2_to_kmps2(s.get("radial", 1e-6))
+        sigma_t = mps2_to_kmps2(s.get("tangential", 1e-6))
+        sigma_n = mps2_to_kmps2(s.get("normal", 1e-6))
     pn = ProcessNoiseConfig(
-        sigma_radial=pn_raw.get("sigma_radial", 1e-9),
-        sigma_tangential=pn_raw.get("sigma_tangential", 1e-9),
-        sigma_normal=pn_raw.get("sigma_normal", 1e-9),
-        scale=pn_raw.get("scale", 1.0),
+        sigma_radial=float(pn_raw.get("sigma_radial", sigma_r or 1e-9)),
+        sigma_tangential=float(pn_raw.get("sigma_tangential", sigma_t or 1e-9)),
+        sigma_normal=float(pn_raw.get("sigma_normal", sigma_n or 1e-9)),
+        scale=float(pn_raw.get("global_scale", pn_raw.get("scale", 1.0))),
     )
 
     meas_raw = raw.get("measurement", {})
+    # SHIRO demo format: tracking_model with measurement_cadence_s and outages in hours
+    tr_raw = raw.get("tracking_model", {})
+    if tr_raw:
+        cadence = tr_raw.get("measurement_cadence_s", meas_raw.get("update_interval", 3600.0))
+        noise_m = tr_raw.get("measurement_noise", {})
+        noise_pos_km = (noise_m.get("position_sigma_m", 50) / 1000.0) if noise_m else meas_raw.get("noise_sigma_pos", 0.01)
+        outage_windows = []
+        for o in tr_raw.get("outages", []):
+            sh = o.get("start_hours_from_start")
+            eh = o.get("end_hours_from_start")
+            if sh is not None and eh is not None:
+                outage_windows.append({"start": sh * 3600.0, "end": eh * 3600.0})
+        if outage_windows:
+            meas_raw = {**meas_raw, "update_interval": cadence, "noise_sigma_pos": noise_pos_km, "outage_windows": outage_windows}
     meas = MeasurementConfig(
         update_interval=meas_raw.get("update_interval", 3600.0),
         noise_sigma_pos=meas_raw.get("noise_sigma_pos", 0.01),
@@ -75,9 +110,18 @@ def _load_config_yaml(path: Path):
     )
 
     tv1_raw = raw.get("threshold_v1_decision", {})
+    # SHIRO demo: decision_models.baseline.critical_trigger
+    dm_baseline = (raw.get("decision_models") or {}).get("baseline", {})
+    ct = dm_baseline.get("critical_trigger", tv1_raw)
+    pc_crit = ct.get("pc_critical", tv1_raw.get("pc_threshold", 1e-4))
+    d_act_km = None
+    if "d_act_m" in ct:
+        d_act_km = ct["d_act_m"] / 1000.0
+    elif tv1_raw.get("miss_distance_threshold") is not None:
+        d_act_km = tv1_raw["miss_distance_threshold"]
     tv1 = ThresholdV1Config(
-        pc_threshold=tv1_raw.get("pc_threshold", 1e-4),
-        miss_distance_threshold=tv1_raw.get("miss_distance_threshold"),
+        pc_threshold=pc_crit,
+        miss_distance_threshold=d_act_km if d_act_km is not None else tv1_raw.get("miss_distance_threshold"),
         time_to_tca_gate=tv1_raw.get("time_to_tca_gate", 86400.0),
     )
 
@@ -93,24 +137,63 @@ def _load_config_yaml(path: Path):
         staleness_ref=iv1_raw.get("staleness_ref", 86400.0),
     )
 
+    # SHIRO config from shiro_decision or decision_models.shiro
+    shiro_config = None
+    shiro_raw = raw.get("shiro_decision") or (raw.get("decision_models") or {}).get("shiro", {})
+    if shiro_raw:
+        gating = shiro_raw.get("gating", {})
+        geom = gating.get("geometry_relevant_requires", {})
+        d_watch_m = geom.get("d_watch_m", 8000)
+        elev = shiro_raw.get("elevated_triggers", [])
+        dt_max_s = 3600.0
+        for e in elev:
+            if e.get("type") == "freshness" and e.get("dt_since_last_update_gte_s") is not None:
+                dt_max_s = e["dt_since_last_update_gte_s"]
+                break
+        crit = shiro_raw.get("critical_trigger", {})
+        d_act_m = crit.get("d_act_m", 1000)
+        shiro_config = ShiroConfig(
+            d_watch_km=d_watch_m / 1000.0,
+            d_act_km=d_act_m / 1000.0,
+            pc_critical=crit.get("pc_critical", 1e-4),
+            dt_max_s=dt_max_s,
+        )
+
     tl = raw.get("timeline", {})
     risk = raw.get("risk", {})
+    # SHIRO demo: scenario.duration_hours, scenario.tca_time_hours_from_start, encounter_geometry
+    scenario_raw = raw.get("scenario", {})
+    enc_raw = raw.get("encounter_geometry", {})
+    seed = scenario_raw.get("seed", raw.get("seed", 42))
+    t_end = tl.get("t_end")
+    if t_end is None and scenario_raw.get("duration_hours") is not None:
+        t_end = scenario_raw["duration_hours"] * 3600.0
+    t_end = t_end or 259200.0
+    dt = tl.get("dt", 60.0)
+    t_tca_frac = tl.get("t_tca_frac")
+    if t_tca_frac is None and scenario_raw.get("tca_time_hours_from_start") is not None and scenario_raw.get("duration_hours"):
+        t_tca_frac = scenario_raw["tca_time_hours_from_start"] / scenario_raw["duration_hours"]
+    t_tca_frac = t_tca_frac if t_tca_frac is not None else 0.6
+    miss_km = raw.get("miss_distance_km")
+    if miss_km is None and enc_raw.get("target_miss_distance_m") is not None:
+        miss_km = enc_raw["target_miss_distance_m"] / 1000.0
+    miss_km = miss_km if miss_km is not None else 0.5
 
-    # Generate the scenario geometry (orbital states), then overlay YAML params
     config = generate_default_scenario(
-        seed=raw.get("seed", 42),
-        miss_distance_km=raw.get("miss_distance_km", 0.5),
-        t_end=tl.get("t_end", 259200.0),
-        dt=tl.get("dt", 60.0),
-        dynamics=DynamicsModel(raw.get("dynamics_model", "two_body_plus_J2")),
+        seed=int(seed),
+        miss_distance_km=float(miss_km),
+        t_end=float(t_end),
+        dt=float(dt),
+        dynamics=DynamicsModel(raw.get("dynamics_model", scenario_raw.get("dynamics_model", "two_body_plus_J2"))),
+        t_tca_frac=float(t_tca_frac),
     )
 
-    # Overlay sub-configs
     config.process_noise = pn
     config.measurement = meas
     config.maneuver = maneuver
     config.threshold_v1 = tv1
     config.integrity_v1 = iv1
+    config.shiro = shiro_config
     config.t_start = tl.get("t_start", 0.0)
     config.combined_hard_body_radius = risk.get("combined_hard_body_radius", 0.02)
 
@@ -921,7 +1004,7 @@ def doctor():
     # 7. Config validation check
     click.echo("")
     try:
-        from stresslab.types import SimulationConfig
+        from stresslab.stresslab_types import SimulationConfig
         cfg = generate_default_scenario()
         _ = cfg.run_id()
         _ok("Default scenario generation")

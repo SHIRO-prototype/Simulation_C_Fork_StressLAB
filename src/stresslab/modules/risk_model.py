@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.stats import ncx2
 
-from stresslab.types import RiskResult
+from stresslab.stresslab_types import RiskResult
 
 
 def _pc_foster_2d(

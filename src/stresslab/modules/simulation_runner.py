@@ -22,7 +22,7 @@ from typing import Optional
 
 import numpy as np
 
-from stresslab.types import (
+from stresslab.stresslab_types import (
     SimulationConfig,
     IntegrityV1State,
     KnowledgeStream,
@@ -245,6 +245,7 @@ def run_simulation(
             prev_threshold_v1_trigger=threshold_v1_trigger,
             prev_integrity_v1_trigger=integrity_v1_trigger,
             prev_integrity_v1_state=integrity_v1_state,
+            shiro_config=config.shiro,
         )
         threshold_v1_trigger = decision.threshold_v1_trigger_time
         integrity_v1_trigger = decision.integrity_v1_trigger_time
@@ -282,6 +283,8 @@ def run_simulation(
                 "integrity_v1_score": decision.integrity_v1_score,
                 "threshold_v1_trigger": threshold_v1_trigger,
                 "integrity_v1_trigger": integrity_v1_trigger,
+                "shiro_state": decision.shiro_state.value if decision.shiro_state else None,
+                "shiro_trigger_path": decision.shiro_trigger_path,
             })
 
         if verbose and (i + 1) % 100 == 0:
