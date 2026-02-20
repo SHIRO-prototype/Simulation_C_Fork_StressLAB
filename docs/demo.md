@@ -116,3 +116,29 @@ meaningfully exercised the degradation pipeline:
 
 D0 (control) is expected to have all flags false. D1-D4 should have
 relevant flags true.
+
+## 8. Case-Driven Stress Test Flow
+
+StressLAB also supports an operator-first case workflow:
+
+1. Open `/stress-test/new`
+2. Upload/paste a `CaseSnapshot` (or start from preset)
+3. Validate and create case
+4. Run baseline (`run_label=BASELINE`)
+5. Apply `StressKnobs` and run stress (`run_label=STRESS`)
+6. Open `/cases/<case_id>/compare` for overlay plots + deltas
+7. Open `/api/cases/<case_id>/onepager` and print to PDF
+
+Evidence pack export:
+
+- `/api/cases/<case_id>/export`
+
+API endpoints added for case workflow:
+
+- `GET /api/cases`
+- `GET /api/cases/{case_id}`
+- `POST /api/cases/validate`
+- `POST /api/cases`
+- `POST /api/cases/{case_id}/baseline`
+- `POST /api/cases/{case_id}/stress`
+- `GET /api/cases/{case_id}/compare`

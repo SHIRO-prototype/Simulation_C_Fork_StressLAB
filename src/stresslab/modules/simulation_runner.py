@@ -229,6 +229,8 @@ def run_simulation(
 
         # ---- 8. Decision ----
         max_staleness = max(meas1.time_since_last_update, meas2.time_since_last_update)
+        reference_staleness_obj1 = t_now - reference_stream.last_update_time_obj1
+        reference_staleness_obj2 = t_now - reference_stream.last_update_time_obj2
         combined_cov_norm = cov_result_1.trace + cov_result_2.trace
         combined_growth = cov_result_1.growth_rate + cov_result_2.growth_rate
 
@@ -262,6 +264,10 @@ def run_simulation(
             geometry=geom,
             risk=risk,
             decision=decision,
+            reference_cov_trace_obj1=float(np.trace(reference_stream.cov_obj1)),
+            reference_cov_trace_obj2=float(np.trace(reference_stream.cov_obj2)),
+            reference_staleness_obj1=float(reference_staleness_obj1),
+            reference_staleness_obj2=float(reference_staleness_obj2),
         )
         logger.record(step)
 
@@ -304,6 +310,7 @@ def run_simulation(
         sum_path = logger.write_summary(
             output_dir, run_id, config, threshold_v1_trigger, integrity_v1_trigger,
             scenario_metadata=scenario_metadata,
+            timeseries_path=ts_path,
         )
         result["timeseries_path"] = ts_path
         result["summary_path"] = sum_path

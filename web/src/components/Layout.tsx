@@ -6,12 +6,7 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-const NAV_ITEMS = [
-  { to: "/", label: "Runs" },
-  { to: "/demo", label: "Demo" },
-  { to: "/sweeps", label: "Sweeps" },
-  { to: "/mc", label: "Monte Carlo" },
-] as const;
+const NAV_ITEMS = [{ to: "/stress-test/new", label: "Stress Tester", icon: "target" }] as const;
 
 export default function Layout({ children }: LayoutProps) {
   const [version, setVersion] = useState<string>("");
@@ -36,20 +31,23 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Navigation */}
         <nav className="flex flex-col gap-1 px-3 mt-2">
-          {NAV_ITEMS.map(({ to, label }) => (
+          {NAV_ITEMS.map(({ to, label, icon }) => (
             <NavLink
               key={to}
               to={to}
-              end={to === "/"}
+              end
               className={({ isActive }) =>
                 [
-                  "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-gray-700 text-white"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white",
                 ].join(" ")
               }
             >
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-gray-800 px-1 text-[10px] uppercase tracking-wide text-gray-300">
+                {icon}
+              </span>
               {label}
             </NavLink>
           ))}
@@ -67,7 +65,7 @@ export default function Layout({ children }: LayoutProps) {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
         <header className="flex items-center h-14 shrink-0 border-b border-gray-200 bg-white px-6">
-          <h1 className="text-lg font-semibold text-gray-800">Dashboard</h1>
+          <h1 className="text-lg font-semibold text-gray-800">Stress Tester</h1>
         </header>
 
         {/* Content */}

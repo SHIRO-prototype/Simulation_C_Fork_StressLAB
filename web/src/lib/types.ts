@@ -113,3 +113,27 @@ export interface MCListResponse extends VersionEnvelope {
 export interface MCSummaryResponse extends VersionEnvelope {
   summary: Record<string, unknown>;
 }
+
+export interface CaseIndex {
+  case_id: string;
+  source: string;
+  created_at: string;
+  notes: string | null;
+  snapshot_path: string;
+  baseline_run_id: string | null;
+  stress_run_id: string | null;
+}
+
+export interface CaseListResponse extends VersionEnvelope {
+  cases: CaseIndex[];
+  total: number;
+}
+
+export interface CaseDetailResponse extends VersionEnvelope {
+  case: CaseIndex;
+  snapshot: Record<string, unknown>;
+}
+
+export interface CompareResponse extends VersionEnvelope {
+  compare: Record<string, unknown>;
+}

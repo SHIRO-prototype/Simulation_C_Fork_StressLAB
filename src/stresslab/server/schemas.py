@@ -128,3 +128,27 @@ class MCListResponse(VersionMixin):
 
 class MCSummaryResponse(VersionMixin):
     summary: dict[str, Any]
+
+
+class CaseIndex(BaseModel):
+    case_id: str
+    source: str
+    created_at: str
+    notes: Optional[str] = None
+    snapshot_path: str
+    baseline_run_id: Optional[str] = None
+    stress_run_id: Optional[str] = None
+
+
+class CaseListResponse(VersionMixin):
+    cases: list[CaseIndex]
+    total: int
+
+
+class CaseDetailResponse(VersionMixin):
+    case: CaseIndex
+    snapshot: dict[str, Any]
+
+
+class CompareResponse(VersionMixin):
+    compare: dict[str, Any]

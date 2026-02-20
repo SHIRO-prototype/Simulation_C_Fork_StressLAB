@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -78,6 +78,70 @@ def downsample(df: pd.DataFrame, max_points: int = 5000) -> pd.DataFrame:
     if indices[-1] != len(df) - 1:
         indices.append(len(df) - 1)
     return df.iloc[indices].reset_index(drop=True)
+
+
+def resample_uniform(
+    df: pd.DataFrame,
+    max_points: int = 300,
+    step_columns: Optional[set[str]] = None,
+) -> pd.DataFrame:
+    """Resample to a uniform timestamp grid.
+
+    Rules:
+      - Continuous numeric metrics: linear interpolation.
+      - Discrete/state metrics: previous-step (forward-fill) interpolation.
+    """
+    if "timestamp" not in df.columns:
+        return df
+
+    if max_points < 2:
+        max_points = 2
+
+    step_cols = step_columns or {
+        "threshold_v1_alert_state",
+        "integrity_v1_state",
+        "shiro_state",
+        "shiro_trigger_path",
+        "measurement_applied_obj1",
+        "measurement_applied_obj2",
+    }
+
+    sorted_df = df.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="last")
+    if len(sorted_df) <= max_points:
+        return sorted_df.reset_index(drop=True)
+
+    ts = sorted_df["timestamp"].to_numpy(dtype=float)
+    grid = np.linspace(float(ts[0]), float(ts[-1]), num=max_points)
+
+    out: dict[str, Any] = {"timestamp": grid}
+    indexed = sorted_df.set_index("timestamp")
+    grid_index = pd.Index(grid, name="timestamp")
+
+    for col in sorted_df.columns:
+        if col == "timestamp":
+            continue
+        series = indexed[col]
+
+        is_numeric = pd.api.types.is_numeric_dtype(series)
+        if is_numeric and col not in step_cols:
+            valid = series.dropna()
+            if len(valid) >= 2:
+                out[col] = np.interp(
+                    grid,
+                    valid.index.to_numpy(dtype=float),
+                    valid.to_numpy(dtype=float),
+                )
+            elif len(valid) == 1:
+                out[col] = np.full_like(grid, float(valid.iloc[0]), dtype=float)
+            else:
+                out[col] = np.full_like(grid, np.nan, dtype=float)
+        else:
+            ffilled = series.reindex(grid_index, method="ffill")
+            if ffilled.isna().any():
+                ffilled = ffilled.fillna(method="bfill")
+            out[col] = ffilled.to_numpy()
+
+    return pd.DataFrame(out)
 
 
 def to_json_payload(df: pd.DataFrame) -> dict:

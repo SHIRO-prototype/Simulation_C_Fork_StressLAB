@@ -142,6 +142,10 @@ class TimeStep:
     geometry: GeometryResult
     risk: RiskResult
     decision: DecisionResult
+    reference_cov_trace_obj1: Optional[float] = None
+    reference_cov_trace_obj2: Optional[float] = None
+    reference_staleness_obj1: Optional[float] = None
+    reference_staleness_obj2: Optional[float] = None
 
 
 @dataclass

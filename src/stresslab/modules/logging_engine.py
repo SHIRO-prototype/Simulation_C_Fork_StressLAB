@@ -8,6 +8,7 @@ Collects per-timestep data into a DataFrame and writes:
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -67,6 +68,8 @@ class LoggingEngine:
             "rel_velocity_at_tca": step.geometry.rel_velocity_at_tca,
             "cov_trace_obj1": step.covariance_obj1.trace,
             "cov_trace_obj2": step.covariance_obj2.trace,
+            "cov_trace_obj1_reference": step.reference_cov_trace_obj1,
+            "cov_trace_obj2_reference": step.reference_cov_trace_obj2,
             "cov_frobenius_obj1": step.covariance_obj1.frobenius,
             "cov_frobenius_obj2": step.covariance_obj2.frobenius,
             "cov_max_eig_obj1": step.covariance_obj1.max_eigenvalue,
@@ -85,6 +88,8 @@ class LoggingEngine:
             "measurement_applied_obj2": step.measurement_obj2.applied,
             "staleness_obj1": step.measurement_obj1.time_since_last_update,
             "staleness_obj2": step.measurement_obj2.time_since_last_update,
+            "staleness_obj1_reference": step.reference_staleness_obj1,
+            "staleness_obj2_reference": step.reference_staleness_obj2,
             "freshness_score": _freshness,
             "pc_drift": _pc_drift,
         })
@@ -361,6 +366,7 @@ class LoggingEngine:
         threshold_v1_trigger_time: Optional[float],
         integrity_v1_trigger_time: Optional[float],
         scenario_metadata: Optional[dict] = None,
+        timeseries_path: Optional[Path] = None,
     ) -> Path:
         """Write run summary to JSON.
 
@@ -371,6 +377,7 @@ class LoggingEngine:
                 simulation results or run_id.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
+        now_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
         metrics = self.compute_summary(
             config, threshold_v1_trigger_time, integrity_v1_trigger_time,
@@ -387,14 +394,29 @@ class LoggingEngine:
         scenario_purpose = sm.get("scenario_purpose")
         scenario_takeaway = sm.get("scenario_takeaway")
         tags = sm.get("tags", [])
+        reserved_keys = {
+            "run_label",
+            "scenario_title",
+            "scenario_purpose",
+            "scenario_takeaway",
+            "tags",
+        }
+        extra_metadata = {k: v for k, v in sm.items() if k not in reserved_keys}
 
         summary = {
             "run_id": run_id,
             "seed": config.seed,
+            "created_at_utc": now_utc,
             "schema_version": SCHEMA_VERSION,
             "metrics_contract_version": metrics.contract_version,
             "stresslab_version": STRESSLAB_VERSION,
             "run_label": run_label,
+            "case_id": sm.get("case_id"),
+            "knobs_used": sm.get("stress_knobs", {
+                "measurement_cadence_seconds": config.measurement.update_interval,
+                "outage_windows": config.measurement.outage_windows,
+                "process_noise_scale": config.process_noise.scale,
+            }),
             "scenario_title": scenario_title,
             "scenario_purpose": scenario_purpose,
             "scenario_takeaway": scenario_takeaway,
@@ -422,7 +444,14 @@ class LoggingEngine:
             "sanity": sanity,
             "config": config_snapshot,
             "story": story,
+            "debug": {
+                "timeseries_path": str(timeseries_path) if timeseries_path else "",
+                "created_at_utc": now_utc,
+                "seed": config.seed,
+            },
         }
+
+        summary.update(extra_metadata)
 
         path = output_dir / f"summary_{run_id}.json"
         with open(path, "w") as f:

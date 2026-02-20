@@ -122,6 +122,11 @@ class TestRuns:
         assert "rows" in data
         assert "timestamp" in data["columns"]
         assert len(data["rows"]) > 0
+        assert data["meta"]["run_id"] == run_id
+        assert "run_label" in data["meta"]
+        assert "loaded_path" in data["meta"]
+        assert "n_rows" in data["meta"]
+        assert "key_field_ranges" in data["meta"]
         # Version fields
         assert data["schema_version"] == SCHEMA_VERSION
 

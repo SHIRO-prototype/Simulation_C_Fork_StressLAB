@@ -12,6 +12,7 @@ import click
 from stresslab import __version__
 from stresslab.modules.scenario_generator import generate_default_scenario, export_scenario
 from stresslab.modules.simulation_runner import run_simulation
+from stresslab.modules.synth_case import generate_synthetic_case
 from stresslab.modules.monte_carlo import run_monte_carlo
 from stresslab.stresslab_types import DynamicsModel
 
@@ -1038,6 +1039,17 @@ def doctor():
     except Exception as e:
         _fail(f"Cannot write to outputs/: {e}")
 
+    # 11. Case workspace permissions
+    try:
+        case_dir = Path("outputs") / "cases"
+        case_dir.mkdir(parents=True, exist_ok=True)
+        case_test = case_dir / ".doctor_case_check"
+        case_test.write_text("ok")
+        case_test.unlink()
+        _ok("Write permissions in outputs/cases/")
+    except Exception as e:
+        _fail(f"Cannot write to outputs/cases/: {e}")
+
     # Summary
     click.echo("")
     if all_ok and warnings == 0:
@@ -1062,6 +1074,70 @@ def doctor():
 
 
 # ---------------------------------------------------------------------------
+# synth-case command
+# ---------------------------------------------------------------------------
+
+@main.command("synth-case")
+@click.option("--mode", type=click.Choice(["A", "B"], case_sensitive=False), default="A")
+@click.option("--seed", default=42, type=int)
+@click.option("--case-id", required=True, type=str)
+@click.option("--target-miss-m", default=200.0, type=float)
+@click.option("--target-tca-hours", default=4.0, type=float)
+@click.option("--primary-pos-sigma-m", default=20.0, type=float)
+@click.option("--secondary-pos-sigma-m", default=100.0, type=float)
+@click.option("--primary-vel-sigma-mps", default=0.02, type=float)
+@click.option("--secondary-vel-sigma-mps", default=0.10, type=float)
+@click.option("--hbr-m", default=5.0, type=float)
+@click.option("--horizon-seconds", default=172800.0, type=float)
+@click.option("--output", required=True, type=click.Path())
+def synth_case(
+    mode,
+    seed,
+    case_id,
+    target_miss_m,
+    target_tca_hours,
+    primary_pos_sigma_m,
+    secondary_pos_sigma_m,
+    primary_vel_sigma_mps,
+    secondary_vel_sigma_mps,
+    hbr_m,
+    horizon_seconds,
+    output,
+):
+    """Generate synthetic conjunction CaseSnapshot for Stress Tester."""
+    out_path = Path(output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    result = generate_synthetic_case(
+        case_id=case_id,
+        mode=mode,
+        seed=seed,
+        target_miss_m=target_miss_m,
+        target_tca_hours=target_tca_hours,
+        primary_pos_sigma_m=primary_pos_sigma_m,
+        secondary_pos_sigma_m=secondary_pos_sigma_m,
+        primary_vel_sigma_mps=primary_vel_sigma_mps,
+        secondary_vel_sigma_mps=secondary_vel_sigma_mps,
+        hard_body_radius_m=hbr_m,
+        horizon_seconds=horizon_seconds,
+    )
+
+    if out_path.suffix.lower() in {".yaml", ".yml"}:
+        try:
+            import yaml
+        except ImportError:
+            raise click.ClickException("PyYAML not installed. Install with: pip install pyyaml")
+        with open(out_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(result["case_snapshot"], f, sort_keys=False)
+    else:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(result["case_snapshot"], f, indent=2)
+
+    click.echo(f"Wrote CaseSnapshot: {out_path}")
+    click.echo(json.dumps(result["preview"], indent=2))
+
+
+# ---------------------------------------------------------------------------
 # serve command (local web dashboard)
 # ---------------------------------------------------------------------------
 
@@ -1072,7 +1148,8 @@ def doctor():
 @click.option("--host", default="127.0.0.1", help="Host to bind to")
 @click.option("--open", "open_browser", is_flag=True, help="Open browser on start")
 @click.option("--dev", is_flag=True, help="Enable CORS for Vite dev server")
-def serve(workspace, port, host, open_browser, dev):
+@click.option("--enable-launch", is_flag=True, help="Allow API-triggered baseline/stress run launches")
+def serve(workspace, port, host, open_browser, dev, enable_launch):
     """Start the local web dashboard for browsing simulation results.
 
     Launches a FastAPI server that serves the StressLAB dashboard UI
@@ -1095,7 +1172,7 @@ def serve(workspace, port, host, open_browser, dev):
     from stresslab.server.app import create_app
 
     workspace_path = Path(workspace).resolve()
-    app = create_app(workspace=workspace_path, dev_mode=dev)
+    app = create_app(workspace=workspace_path, dev_mode=dev, enable_launch=enable_launch)
 
     if open_browser:
         import webbrowser
@@ -1112,6 +1189,7 @@ def serve(workspace, port, host, open_browser, dev):
     click.echo(f"  Version:   {__version__}")
     click.echo(f"  Workspace: {workspace_path}")
     click.echo(f"  URL:       http://{host}:{port}")
+    click.echo(f"  Launch API:{' enabled' if enable_launch else ' disabled'}")
     if dev:
         click.echo(f"  Dev mode:  CORS enabled for localhost:5173/5174")
     click.echo("")
