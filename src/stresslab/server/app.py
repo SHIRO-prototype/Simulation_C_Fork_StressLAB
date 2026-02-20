@@ -1188,7 +1188,9 @@ def create_app(workspace: Path, dev_mode: bool = False, enable_launch: bool = Fa
     web_dist_candidates = [
         Path(env_web_dist) if env_web_dist else None,
         Path.cwd() / "web" / "dist",
+        Path.cwd() / "Simulation_C_Fork_StressLAB" / "web" / "dist",
         Path(__file__).parent.parent.parent.parent / "web" / "dist",
+        Path(__file__).parent.parent.parent.parent / "Simulation_C_Fork_StressLAB" / "web" / "dist",
     ]
     web_dist = next((p for p in web_dist_candidates if p is not None and p.is_dir()), None)
 
