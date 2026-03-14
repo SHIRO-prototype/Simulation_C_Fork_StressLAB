@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotColors, plotConfig } from "../lib/chartTheme";
 
 interface StalenessPanelProps {
   columns: string[];
@@ -77,35 +78,37 @@ export default function StalenessPanel({ columns, rows, summary }: StalenessPane
   }
 
   return (
-    <Plot
-      data={[
-        {
-          x: xAxis,
-          y: staleness,
-          type: "scatter",
-          mode: "lines",
-          name: "Staleness (obj1)",
-          line: { shape: "hv", color: "#f97316", width: 2 },
-          fill: "tozeroy",
-          fillcolor: "rgba(249,115,22,0.08)",
-        },
-      ]}
-      layout={{
-        title: { text: "Panel B: Tracking Staleness" },
-        height: 280,
-        xaxis: {
-          title: { text: xLabel },
-          autorange: hasTCA ? "reversed" : true,
-        },
-        yaxis: {
-          title: { text: "Staleness (hours)" },
-        },
-        shapes: shapes as Plotly.Layout["shapes"],
-        legend: { orientation: "h", y: -0.28 },
-        margin: { t: 40, b: 55, l: 60, r: 20 },
-      }}
-      useResizeHandler
-      style={{ width: "100%", height: "280px" }}
-    />
+    <div className="plot-shell">
+      <Plot
+        data={[
+          {
+            x: xAxis,
+            y: staleness,
+            type: "scatter",
+            mode: "lines",
+            name: "Staleness (obj1)",
+            line: { shape: "hv", color: plotColors.amber, width: 2.5 },
+            fill: "tozeroy",
+            fillcolor: "rgba(245, 184, 92, 0.12)",
+          },
+        ]}
+        layout={createPlotLayout({
+          title: "Tracking staleness accumulation",
+          height: 300,
+          xAxis: {
+            title: xLabel,
+            autorange: hasTCA ? "reversed" : true,
+          },
+          yAxis: {
+            title: "Staleness (hours)",
+          },
+          shapes: shapes as Plotly.Layout["shapes"],
+          legend: { y: -0.27 },
+        })}
+        config={plotConfig}
+        useResizeHandler
+        style={{ width: "100%", height: "300px" }}
+      />
+    </div>
   );
 }

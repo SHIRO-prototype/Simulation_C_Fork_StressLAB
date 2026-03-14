@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchRuns } from "../lib/api";
-import type { RunIndex } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // D0-D4 demo scenario definitions (fixed order)

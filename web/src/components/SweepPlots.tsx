@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotConfig } from "../lib/chartTheme";
 
 interface SweepResult {
   param_value: number;
@@ -55,29 +56,32 @@ export default function SweepPlots({ summary }: SweepPlotsProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       {availableMetrics.map((m) => (
-        <Plot
-          key={m.key}
-          data={[
-            {
-              x: paramValues,
-              y: results.map((r) => r[m.key] as number),
-              type: "scatter",
-              mode: "lines+markers",
-              name: m.label,
-              line: { color: m.color },
-              marker: { size: 6 },
-            },
-          ]}
-          layout={{
-            title: { text: `${sweepParam} vs ${m.label}` },
-            height: 350,
-            xaxis: { title: { text: sweepParam } },
-            yaxis: { title: { text: m.yLabel } },
-            margin: { t: 40, b: 60, l: 70, r: 20 },
-          }}
-          useResizeHandler
-          style={{ width: "100%", height: "350px" }}
-        />
+        <div key={m.key} className="plot-shell">
+          <Plot
+            data={[
+              {
+                x: paramValues,
+                y: results.map((r) => r[m.key] as number),
+                type: "scatter",
+                mode: "lines+markers",
+                name: m.label,
+                line: { color: m.color, width: 2.4 },
+                marker: { size: 7, color: m.color, line: { color: "rgba(8, 21, 33, 0.3)", width: 1 } },
+                fill: "tozeroy",
+                fillcolor: `${m.color}22`,
+              },
+            ]}
+            layout={createPlotLayout({
+              title: `${sweepParam} vs ${m.label}`,
+              height: 350,
+              xAxis: { title: sweepParam },
+              yAxis: { title: m.yLabel },
+            })}
+            config={plotConfig}
+            useResizeHandler
+            style={{ width: "100%", height: "350px" }}
+          />
+        </div>
       ))}
     </div>
   );

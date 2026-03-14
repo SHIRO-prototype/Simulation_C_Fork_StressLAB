@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Plot from "react-plotly.js";
 import { fetchCase, fetchCompare, fetchRunTimeseries } from "../lib/api";
+import { createPlotLayout, plotColors, plotConfig } from "../lib/chartTheme";
 import type { TimeseriesResponse } from "../lib/types";
 
 function colSeries(ts: TimeseriesResponse, col: string): Array<number | string | boolean | null> {
@@ -31,22 +32,39 @@ function OverlayChart({
   const yStress = numericSeries(stress, yCol);
 
   return (
-    <div className="rounded border border-gray-200 bg-white p-3">
-      <h3 className="mb-2 text-sm font-semibold text-gray-800">{title}</h3>
+    <div className="plot-shell plot-shell-compact">
       <Plot
         data={[
-          { x: xBase, y: yBase, type: "scatter", mode: "lines", name: "Baseline", line: { color: "#1d4ed8", width: 2 } },
-          { x: xStress, y: yStress, type: "scatter", mode: "lines", name: "Stress", line: { color: "#dc2626", width: 2 } },
+          {
+            x: xBase,
+            y: yBase,
+            type: "scatter",
+            mode: "lines",
+            name: "Baseline",
+            line: { color: plotColors.baseline, width: 2.4 },
+          },
+          {
+            x: xStress,
+            y: yStress,
+            type: "scatter",
+            mode: "lines",
+            name: "Stress",
+            line: { color: plotColors.stress, width: 2.4 },
+            fill: "tozeroy",
+            fillcolor: "rgba(255, 143, 107, 0.08)",
+          },
         ]}
-        layout={{
-          margin: { l: 40, r: 10, t: 10, b: 35 },
-          height: 260,
-          xaxis: { title: "timestamp (s)" },
-          yaxis: { title: yCol },
-          legend: { orientation: "h", x: 0, y: 1.15 },
-        }}
-        config={{ displayModeBar: false, responsive: true }}
+        layout={createPlotLayout({
+          title,
+          height: 308,
+          xAxis: { title: "Timestamp (s)" },
+          yAxis: { title: yCol.replace(/_/g, " ") },
+          legend: { y: -0.22 },
+        })}
+        config={plotConfig}
+        useResizeHandler
         className="w-full"
+        style={{ width: "100%", height: "308px" }}
       />
     </div>
   );
@@ -62,16 +80,17 @@ export default function CaseCompare() {
 
   useEffect(() => {
     if (!caseId) return;
+    const currentCaseId: string = caseId;
     let cancelled = false;
 
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const [caseRes, cmpRes] = await Promise.all([fetchCase(caseId), fetchCompare(caseId)]);
+        const [caseRes, cmpRes] = await Promise.all([fetchCase(currentCaseId), fetchCompare(currentCaseId)]);
         const baselineRunId = caseRes.case.baseline_run_id;
         const stressRunId = caseRes.case.stress_run_id;
-        if (!baselineRunId || !stressRunId) {
+        if (typeof baselineRunId !== "string" || typeof stressRunId !== "string") {
           throw new Error("Baseline and stress runs are required before compare.");
         }
         const [bTs, sTs] = await Promise.all([
@@ -97,48 +116,91 @@ export default function CaseCompare() {
 
   const deltas = useMemo(() => (compare?.deltas as Record<string, unknown>) ?? {}, [compare]);
 
-  if (loading) return <p className="text-gray-500">Loading compare view...</p>;
-  if (error) return <p className="text-red-600">{error}</p>;
-  if (!baselineTs || !stressTs || !caseId) return <p className="text-gray-500">No compare data.</p>;
+  if (loading) {
+    return (
+      <div className="section-card section-pad">
+        <p className="text-slate-500">Loading compare view...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="section-card section-pad">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
+
+  if (!baselineTs || !stressTs || !caseId) {
+    return (
+      <div className="section-card section-pad">
+        <p className="text-slate-500">No compare data.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Case Compare: {caseId}</h1>
-        <div className="flex gap-2">
-          <a
-            href={`/api/cases/${caseId}/onepager`}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded bg-gray-800 px-3 py-2 text-sm text-white"
-          >
-            Open One-Pager
-          </a>
-          <a href={`/api/cases/${caseId}/export`} className="rounded bg-blue-700 px-3 py-2 text-sm text-white">
-            Export Evidence Pack
-          </a>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {Object.entries(deltas).map(([k, v]) => (
-          <div key={k} className="rounded border border-gray-200 bg-white p-3">
-            <div className="text-xs text-gray-500">{k}</div>
-            <div className="text-lg font-semibold text-gray-900">{v == null ? "---" : String(v)}</div>
+    <div className="surface-grid">
+      <section className="section-card section-card-dark section-pad">
+        <div className="grid gap-8 xl:grid-cols-[1.2fr,0.8fr]">
+          <div>
+            <span className="section-kicker" style={{ color: "rgba(244, 238, 229, 0.72)" }}>
+              Differential Analysis
+            </span>
+            <h1 className="page-title" style={{ color: "#fbf5ec", marginTop: 14 }}>
+              Case compare for {caseId}
+            </h1>
+            <p className="page-subtitle" style={{ color: "rgba(244, 238, 229, 0.72)", marginTop: 18 }}>
+              A clean visual overlay of the control run against the degraded case, tuned to show where uncertainty and decision timing start to separate.
+            </p>
           </div>
-        ))}
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <OverlayChart title="Pc Overlay" baseline={baselineTs} stress={stressTs} yCol="pc_degraded" />
-        <OverlayChart title="Staleness Overlay" baseline={baselineTs} stress={stressTs} yCol="staleness_obj1" />
-        <OverlayChart title="Uncertainty Overlay" baseline={baselineTs} stress={stressTs} yCol="cov_trace_obj1" />
-        <OverlayChart title="State Bands Overlay" baseline={baselineTs} stress={stressTs} yCol="integrity_v1_score" />
+          <div className="workflow-card">
+            <span className="section-kicker">Exports</span>
+            <div className="action-row mt-5">
+              <a
+                href={`/api/cases/${caseId}/onepager`}
+                target="_blank"
+                rel="noreferrer"
+                className="action-button action-button-dark"
+              >
+                Open one-pager
+              </a>
+              <a
+                href={`/api/cases/${caseId}/export`}
+                className="action-button action-button-accent"
+              >
+                Export evidence pack
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-card section-pad">
+        <span className="section-kicker">Metric deltas</span>
+        <h2 className="section-heading">What changed under stress</h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Object.entries(deltas).map(([k, v]) => (
+            <div key={k} className="compare-metric">
+              <div className="compare-metric-label">{k.replace(/_/g, " ")}</div>
+              <div className="compare-metric-value">{v == null ? "---" : String(v)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <OverlayChart title="Collision probability overlay" baseline={baselineTs} stress={stressTs} yCol="pc_degraded" />
+        <OverlayChart title="Tracking staleness overlay" baseline={baselineTs} stress={stressTs} yCol="staleness_obj1" />
+        <OverlayChart title="Covariance uncertainty overlay" baseline={baselineTs} stress={stressTs} yCol="cov_trace_obj1" />
+        <OverlayChart title="Integrity score overlay" baseline={baselineTs} stress={stressTs} yCol="integrity_v1_score" />
       </div>
 
       <div>
-        <Link to="/stress-test/new" className="text-sm text-blue-700 hover:underline">
-          Back to Stress Test Builder
+        <Link to="/stress-test/new" className="action-button action-button-secondary">
+          Back to stress test builder
         </Link>
       </div>
     </div>

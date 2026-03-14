@@ -1,10 +1,3 @@
-/**
- * CurrentPostureWidget — shows last-timestep operational snapshot.
- *
- * Displays the current (final) state of the conjunction scenario:
- * decision states, TCA countdown, staleness, and Pc values.
- */
-
 interface CurrentPostureWidgetProps {
   columns: string[];
   rows: (number | string | null)[][];
@@ -44,21 +37,18 @@ function fmtHours(seconds: number | string | null): string {
   return `${h.toFixed(1)}h`;
 }
 
-/** State label styling. */
-function stateStyle(state: string | null | undefined): string {
-  if (!state) return "bg-gray-100 text-gray-600";
+function stateTone(state: string | null | undefined): string {
+  if (!state) return "status-pill status-pill-warn";
   const s = String(state).toLowerCase();
-  if (s === "safe" || s === "monitor") return "bg-green-100 text-green-800";
-  if (s === "alert" || s === "critical") return "bg-red-100 text-red-800";
-  if (s === "warning") return "bg-orange-100 text-orange-800";
-  if (s === "watch") return "bg-yellow-100 text-yellow-800";
-  return "bg-gray-100 text-gray-600";
+  if (s === "safe" || s === "monitor") return "status-pill status-pill-ok";
+  if (s === "alert" || s === "critical") return "status-pill status-pill-critical";
+  return "status-pill status-pill-warn";
 }
 
 export default function CurrentPostureWidget({
   columns,
   rows,
-  summary,
+  summary: _summary,
 }: CurrentPostureWidgetProps) {
   if (rows.length === 0) return null;
 
@@ -76,16 +66,16 @@ export default function CurrentPostureWidget({
       ? pcDeg / pcRef
       : null;
 
-  const items: { label: string; value: string; extra?: string }[] = [
+  const items: { label: string; value: string; pill?: string }[] = [
     {
       label: "Threshold V1",
       value: threshState != null ? String(threshState) : "---",
-      extra: stateStyle(threshState != null ? String(threshState) : null),
+      pill: stateTone(threshState != null ? String(threshState) : null),
     },
     {
       label: "Integrity V1",
       value: integrityState != null ? String(integrityState) : "---",
-      extra: stateStyle(integrityState != null ? String(integrityState) : null),
+      pill: stateTone(integrityState != null ? String(integrityState) : null),
     },
     { label: "Integrity Score", value: fmtNum(integrityScore, 3) },
     { label: "Time to TCA", value: fmtHours(timeTCA) },
@@ -93,32 +83,30 @@ export default function CurrentPostureWidget({
     { label: "Freshness", value: fmtNum(freshness, 3) },
     { label: "Pc Reference", value: fmtSci(pcRef) },
     { label: "Pc Degraded", value: fmtSci(pcDeg) },
-    { label: "Pc Ratio", value: pcRatio != null ? pcRatio.toFixed(2) + "x" : "---" },
+    { label: "Pc Ratio", value: pcRatio != null ? `${pcRatio.toFixed(2)}x` : "---" },
   ];
 
-  const _ = summary; // consumed for type compat; data comes from last row
-
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">
-        Current Posture (Last Timestep)
+    <div className="section-card section-card-dark section-pad">
+      <span className="section-kicker" style={{ color: "rgba(244, 238, 229, 0.72)" }}>
+        Live Posture
+      </span>
+      <h2 className="section-heading" style={{ color: "#fbf5ec", fontSize: "1.7rem" }}>
+        Final-timestep operator snapshot
       </h2>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => (
-          <div key={item.label} className="text-center">
-            <p className="text-xs text-gray-500 truncate" title={item.label}>
+          <div
+            key={item.label}
+            className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-sm"
+          >
+            <p className="text-[0.72rem] uppercase tracking-[0.18em] text-white/50">
               {item.label}
             </p>
-            {item.extra ? (
-              <span
-                className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${item.extra}`}
-              >
-                {item.value}
-              </span>
+            {item.pill ? (
+              <span className={`${item.pill} mt-3`}>{item.value}</span>
             ) : (
-              <p className="mt-1 text-sm font-semibold text-gray-900 truncate" title={item.value}>
-                {item.value}
-              </p>
+              <p className="mt-3 text-xl font-semibold text-[#fbf5ec]">{item.value}</p>
             )}
           </div>
         ))}

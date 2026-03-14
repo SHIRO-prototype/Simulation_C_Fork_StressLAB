@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotColors, plotConfig } from "../lib/chartTheme";
 
 interface PcPanelProps {
   columns: string[];
@@ -111,43 +112,47 @@ export default function PcPanel({ columns, rows, summary }: PcPanelProps) {
   }
 
   return (
-    <Plot
-      data={[
-        {
-          x: xAxis,
-          y: pcRef,
-          type: "scatter",
-          mode: "lines",
-          name: "Pc Reference",
-          line: { color: "#3b82f6", width: 2 },
-        },
-        {
-          x: xAxis,
-          y: pcDeg,
-          type: "scatter",
-          mode: "lines",
-          name: "Pc Degraded",
-          line: { color: "#ef4444", width: 2 },
-        },
-      ]}
-      layout={{
-        title: { text: "Panel A: Collision Probability (Pc)" },
-        height: 340,
-        xaxis: {
-          title: { text: xLabel },
-          autorange: hasTCA ? "reversed" : true,
-        },
-        yaxis: {
-          title: { text: "Pc (log scale)" },
-          type: "log",
-        },
-        shapes: shapes as Plotly.Layout["shapes"],
-        annotations: annotations as Plotly.Layout["annotations"],
-        legend: { orientation: "h", y: -0.22 },
-        margin: { t: 45, b: 55, l: 65, r: 20 },
-      }}
-      useResizeHandler
-      style={{ width: "100%", height: "340px" }}
-    />
+    <div className="plot-shell">
+      <Plot
+        data={[
+          {
+            x: xAxis,
+            y: pcRef,
+            type: "scatter",
+            mode: "lines",
+            name: "Pc Reference",
+            line: { color: plotColors.baseline, width: 2.5 },
+          },
+          {
+            x: xAxis,
+            y: pcDeg,
+            type: "scatter",
+            mode: "lines",
+            name: "Pc Degraded",
+            line: { color: plotColors.stress, width: 2.5 },
+            fill: "tozeroy",
+            fillcolor: "rgba(255, 143, 107, 0.08)",
+          },
+        ]}
+        layout={createPlotLayout({
+          title: "Collision probability drift",
+          height: 360,
+          xAxis: {
+            title: xLabel,
+            autorange: hasTCA ? "reversed" : true,
+          },
+          yAxis: {
+            title: "Pc (log scale)",
+            type: "log",
+          },
+          shapes: shapes as Plotly.Layout["shapes"],
+          annotations: annotations as Plotly.Layout["annotations"],
+          legend: { y: -0.23 },
+        })}
+        config={plotConfig}
+        useResizeHandler
+        style={{ width: "100%", height: "360px" }}
+      />
+    </div>
   );
 }

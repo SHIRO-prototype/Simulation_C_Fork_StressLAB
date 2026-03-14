@@ -57,7 +57,7 @@ def main():
 
     # ---- 1. Single run: with outage ----
     run_cmd([
-        sys.executable, "-m", "stresslab", "run",
+        sys.executable, "-m", "stresslab.cli", "run",
         "--config", "configs/demos/leo_3day_with_outage.yaml",
         "--output-dir", str(demo_dir / "run_with_outage"),
         "--progress",
@@ -65,7 +65,7 @@ def main():
 
     # ---- 2. Single run: no outage ----
     run_cmd([
-        sys.executable, "-m", "stresslab", "run",
+        sys.executable, "-m", "stresslab.cli", "run",
         "--config", "configs/demos/leo_1day_no_outage.yaml",
         "--output-dir", str(demo_dir / "run_no_outage"),
         "--progress",
@@ -73,7 +73,7 @@ def main():
 
     # ---- 3. Compare the two runs ----
     run_cmd([
-        sys.executable, "-m", "stresslab", "compare",
+        sys.executable, "-m", "stresslab.cli", "compare",
         str(demo_dir / "run_with_outage"),
         str(demo_dir / "run_no_outage"),
         "--out", str(demo_dir / "comparison"),
@@ -81,7 +81,7 @@ def main():
 
     # ---- 4. Outage duration sweep ----
     run_cmd([
-        sys.executable, "-m", "stresslab", "sweep",
+        sys.executable, "-m", "stresslab.cli", "sweep",
         "outage.duration",
         "--values", sweep_values,
         "--seed", "42",
@@ -93,7 +93,7 @@ def main():
 
     # ---- 5. Generate reports + plots for sweep ----
     run_cmd([
-        sys.executable, "-m", "stresslab", "report",
+        sys.executable, "-m", "stresslab.cli", "report",
         str(demo_dir / "sweep_outage_duration"),
         "--out", str(demo_dir / "sweep_report"),
         "--formats", "png,json,csv",
@@ -104,7 +104,7 @@ def main():
     summary_files = list(run_out.glob("summary_*.json"))
     if summary_files:
         run_cmd([
-            sys.executable, "-m", "stresslab", "report",
+            sys.executable, "-m", "stresslab.cli", "report",
             str(summary_files[0]),
             "--out", str(demo_dir / "single_run_report"),
             "--formats", "png,json,csv",

@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotConfig } from "../lib/chartTheme";
 
 interface MCPlotsProps {
   summary: Record<string, unknown>;
@@ -63,17 +64,8 @@ export default function MCPlots({ summary }: MCPlotsProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       {hasStats && (
-        <div
-          style={{
-            background: "#1e293b",
-            borderRadius: "8px",
-            padding: "1rem",
-            color: "#e2e8f0",
-            fontFamily: "monospace",
-            fontSize: "0.875rem",
-          }}
-        >
-          <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem" }}>
+        <div className="section-card section-card-dark section-pad" style={{ fontSize: "0.9rem" }}>
+          <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", color: "#fbf5ec" }}>
             Monte Carlo Summary Statistics
           </h3>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -99,30 +91,31 @@ export default function MCPlots({ summary }: MCPlotsProps) {
       )}
 
       {availableHistograms.map((h) => (
-        <Plot
-          key={h.column}
-          data={[
-            {
-              x: extractColumn(
-                csvColumns!,
-                csvRows!,
-                h.column,
-              ) as number[],
-              type: "histogram",
-              name: h.label,
-              marker: { color: h.color },
-            },
-          ]}
-          layout={{
-            title: { text: h.label },
-            height: 350,
-            xaxis: { title: { text: h.column.replace(/_/g, " ") } },
-            yaxis: { title: { text: "Count" } },
-            margin: { t: 40, b: 60, l: 60, r: 20 },
-          }}
-          useResizeHandler
-          style={{ width: "100%", height: "350px" }}
-        />
+        <div key={h.column} className="plot-shell">
+          <Plot
+            data={[
+              {
+                x: extractColumn(
+                  csvColumns!,
+                  csvRows!,
+                  h.column,
+                ) as number[],
+                type: "histogram",
+                name: h.label,
+                marker: { color: h.color, line: { color: "rgba(8, 21, 33, 0.2)", width: 1 } },
+              },
+            ]}
+            layout={createPlotLayout({
+              title: h.label,
+              height: 350,
+              xAxis: { title: h.column.replace(/_/g, " ") },
+              yAxis: { title: "Count" },
+            })}
+            config={plotConfig}
+            useResizeHandler
+            style={{ width: "100%", height: "350px" }}
+          />
+        </div>
       ))}
 
       {hasCsv && availableHistograms.length === 0 && (

@@ -155,6 +155,27 @@ function mergeCDM(snapshot: JsonMap, cdm: JsonMap): JsonMap {
   return next;
 }
 
+const WORKFLOW_STEPS = [
+  {
+    title: "Load or choose a case snapshot",
+    copy: "Start from an upload or a curated LEO preset with states and covariance already aligned to the schema.",
+  },
+  {
+    title: "Validate the orbital picture",
+    copy: "Run structural, PSD, and sanity checks before creating a case record in the local workspace.",
+  },
+  {
+    title: "Execute baseline and stress runs",
+    copy: "Preserve a clean control, then degrade cadence, inject outages, and widen uncertainty to see decision drift.",
+  },
+];
+
+function formatPreviewSeconds(value: number | null): string {
+  if (value == null) return "-";
+  if (Math.abs(value) >= 3600) return `${(value / 3600).toFixed(2)} h`;
+  return `${value.toFixed(1)} s`;
+}
+
 export default function StressTestNew() {
   const navigate = useNavigate();
   const { caseId: routeCaseId } = useParams<{ caseId: string }>();
@@ -225,11 +246,7 @@ export default function StressTestNew() {
         parsed = null;
       }
     }
-    if (parsed) {
-      setSnapshot(parsed);
-    } else {
-      setSnapshot(null);
-    }
+    setSnapshot(parsed);
     setSnapshotName(file.name);
     setValidationOk(false);
     setValidationErrors([]);
@@ -252,11 +269,9 @@ export default function StressTestNew() {
   }
 
   async function onValidate() {
-    if (!snapshot) {
-      if (!snapshotRawText) {
-        setStatus("Upload a snapshot or choose a preset first.");
-        return;
-      }
+    if (!snapshot && !snapshotRawText) {
+      setStatus("Upload a snapshot or choose a preset first.");
+      return;
     }
     try {
       const validatePayload = snapshot
@@ -325,171 +340,336 @@ export default function StressTestNew() {
     }
   }
 
+  const statusTone = validationErrors.length > 0
+    ? "status-pill status-pill-critical"
+    : stressDone
+      ? "status-pill status-pill-ok"
+      : validationOk
+        ? "status-pill status-pill-warn"
+        : "status-pill status-pill-warn";
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Stress Tester</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Upload a conjunction snapshot (primary + secondary) and stress test decision behavior under degraded tracking.
-        </p>
-      </div>
-
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-gray-900">Upload Inputs</h2>
-        <div className="mt-3 grid gap-4 md:grid-cols-2">
+    <div className="surface-grid">
+      <section className="section-card section-card-dark section-pad">
+        <div className="grid gap-8 xl:grid-cols-[1.3fr,0.8fr]">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Case Snapshot</label>
-            <input
-              type="file"
-              accept=".json,.yaml,.yml"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onSnapshotUpload(f);
-              }}
-              className="block w-full rounded border border-gray-300 p-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-gray-500">Upload snapshot containing epoch, state vectors, and 6x6 covariances.</p>
-            <p className="mt-1 text-xs text-gray-700">Loaded: {snapshotName}</p>
+            <span className="section-kicker" style={{ color: "rgba(244, 238, 229, 0.72)" }}>
+              Orbital Stress Studio
+            </span>
+            <h1 className="page-title" style={{ color: "#fbf5ec", marginTop: 14 }}>
+              Make the case, bend the sensing chain, compare the decisions.
+            </h1>
+            <p className="page-subtitle" style={{ color: "rgba(244, 238, 229, 0.72)", marginTop: 18 }}>
+              Upload a conjunction snapshot or start from a preset, then drive a cinematic operator workflow from validation through evidence-pack export.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <span className={statusTone}>
+                {validationErrors.length > 0 ? "Validation blocked" : stressDone ? "Stress complete" : validationOk ? "Ready to create case" : "Awaiting validation"}
+              </span>
+              {caseId && <span className="status-pill status-pill-ok">Case {caseId}</span>}
+              {baselineDone && <span className="status-pill status-pill-ok">Baseline done</span>}
+              {stressDone && <span className="status-pill status-pill-ok">Stress done</span>}
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">CDM (Optional)</label>
-            <input
-              type="file"
-              accept=".xml,.json,.txt"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onCdmUpload(f);
-              }}
-              className="block w-full rounded border border-gray-300 p-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-gray-500">Optional parse + map into CaseSnapshot if known JSON fields are present.</p>
-            <p className="mt-1 text-xs text-gray-700">Loaded: {cdmName || "none"}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={usePreset} onChange={(e) => setUsePreset(e.target.checked)} />
-            Use preset instead of upload
-          </label>
-          {usePreset && (
-            <select
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-            >
-              {Object.keys(PRESETS).map((name) => (
-                <option key={name} value={name}>{name}</option>
+          <div className="workflow-card">
+            <span className="section-kicker">Workflow</span>
+            <div className="workflow-list mt-4">
+              {WORKFLOW_STEPS.map((step, index) => (
+                <div key={step.title} className="workflow-step">
+                  <span className="workflow-index">{index + 1}</span>
+                  <div>
+                    <strong>{step.title}</strong>
+                    <span>{step.copy}</span>
+                  </div>
+                </div>
               ))}
-            </select>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-gray-900">Validation and Preview</h2>
-        <div className="mt-3 grid gap-4 lg:grid-cols-2">
-          <div className="rounded border border-gray-200 bg-gray-50 p-3">
-            <div className="text-sm font-medium text-gray-800">Validation Panel</div>
-            <ul className="mt-2 space-y-1 text-xs text-gray-700">
-              <li>missing fields: {validationOk ? "ok" : "pending"}</li>
-              <li>covariance symmetry check: {validationOk ? "ok" : "pending"}</li>
-              <li>PSD check (eigenvalues &gt;= -eps): {validationOk ? "ok" : "pending"}</li>
-              <li>unit sanity bounds: {validationOk ? "ok" : "pending"}</li>
-            </ul>
-            {validationErrors.length > 0 && (
-              <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-                {validationErrors.map((err) => (
-                  <div key={err}>{err}</div>
-                ))}
-              </div>
-            )}
-            <button onClick={onValidate} className="mt-3 rounded bg-gray-800 px-3 py-2 text-sm text-white">Validate</button>
-          </div>
-
-          <div className="rounded border border-gray-200 bg-gray-50 p-3">
-            <div className="text-sm font-medium text-gray-800">Preview Cards</div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded bg-white p-2"><div className="text-gray-500">epoch</div><div className="font-semibold">{preview.epoch}</div></div>
-              <div className="rounded bg-white p-2"><div className="text-gray-500">rough separation</div><div className="font-semibold">{preview.sep == null ? "-" : `${preview.sep.toFixed(3)} km`}</div></div>
-              <div className="rounded bg-white p-2"><div className="text-gray-500">cov trace primary</div><div className="font-semibold">{preview.tr1 == null ? "-" : preview.tr1.toExponential(3)}</div></div>
-              <div className="rounded bg-white p-2"><div className="text-gray-500">cov trace secondary</div><div className="font-semibold">{preview.tr2 == null ? "-" : preview.tr2.toExponential(3)}</div></div>
-              <div className="rounded bg-white p-2 col-span-2"><div className="text-gray-500">initial TCA guess</div><div className="font-semibold">{preview.tca == null ? "-" : `${preview.tca.toFixed(1)} s`}</div></div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-gray-900">Baseline</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            onClick={onCreateCase}
-            disabled={!validationOk}
-            className="rounded bg-blue-700 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            Create Case
-          </button>
-          <button
-            onClick={onRunBaseline}
-            disabled={!caseId}
-            className="rounded bg-green-700 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            Run Baseline
-          </button>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="meta-card">
+            <div className="meta-card-label">Epoch</div>
+            <div className="meta-card-value" style={{ fontSize: "1rem" }}>{preview.epoch}</div>
+          </div>
+          <div className="meta-card">
+            <div className="meta-card-label">Initial separation</div>
+            <div className="meta-card-value">{preview.sep == null ? "-" : `${preview.sep.toFixed(3)} km`}</div>
+          </div>
+          <div className="meta-card">
+            <div className="meta-card-label">Primary covariance trace</div>
+            <div className="meta-card-value">{preview.tr1 == null ? "-" : preview.tr1.toExponential(3)}</div>
+          </div>
+          <div className="meta-card">
+            <div className="meta-card-label">Secondary covariance trace</div>
+            <div className="meta-card-value">{preview.tr2 == null ? "-" : preview.tr2.toExponential(3)}</div>
+          </div>
+          <div className="meta-card">
+            <div className="meta-card-label">Rough TCA guess</div>
+            <div className="meta-card-value">{formatPreviewSeconds(preview.tca)}</div>
+          </div>
         </div>
       </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-gray-900">Apply Stress</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="text-sm text-gray-700">measurement_cadence_seconds
-            <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1" value={measurementCadenceSeconds} onChange={(e) => setMeasurementCadenceSeconds(Number(e.target.value))} />
-          </label>
-          <label className="text-sm text-gray-700">outage start hours before now
-            <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1" value={outageStartH} onChange={(e) => setOutageStartH(Number(e.target.value))} />
-          </label>
-          <label className="text-sm text-gray-700">outage duration hours
-            <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1" value={outageDurationH} onChange={(e) => setOutageDurationH(Number(e.target.value))} />
-          </label>
-          <label className="text-sm text-gray-700">process_noise_scale
-            <input type="number" step="0.1" className="mt-1 w-full rounded border border-gray-300 px-2 py-1" value={processNoiseScale} onChange={(e) => setProcessNoiseScale(Number(e.target.value))} />
-          </label>
-          <label className="inline-flex items-center gap-2 pt-6 text-sm text-gray-700">
-            <input type="checkbox" checked={maneuverEnabled} onChange={(e) => setManeuverEnabled(e.target.checked)} />
-            maneuver_uncertainty_enabled
-          </label>
-          {maneuverEnabled && (
-            <label className="text-sm text-gray-700">delta_v_sigma_mps
-              <input type="number" step="0.1" className="mt-1 w-full rounded border border-gray-300 px-2 py-1" value={deltaVSigmaMps} onChange={(e) => setDeltaVSigmaMps(Number(e.target.value))} />
+      <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+        <section className="section-card section-pad">
+          <span className="section-kicker">Inputs</span>
+          <h2 className="section-heading">Snapshot ingestion</h2>
+          <p className="section-copy">
+            Bring in a raw case snapshot, optionally merge a CDM payload, or switch into preset mode for a fast starting point.
+          </p>
+
+          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            <div>
+              <label className="field-label">Case snapshot</label>
+              <input
+                type="file"
+                accept=".json,.yaml,.yml"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onSnapshotUpload(f);
+                }}
+                className="field-input"
+              />
+              <p className="field-hint">
+                Upload epoch, state vectors, and 6x6 covariance matrices in the StressLAB case schema.
+              </p>
+              <div className="mt-3 field-chip">Loaded snapshot: {snapshotName}</div>
+            </div>
+
+            <div>
+              <label className="field-label">CDM overlay</label>
+              <input
+                type="file"
+                accept=".xml,.json,.txt"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onCdmUpload(f);
+                }}
+                className="field-input"
+              />
+              <p className="field-hint">
+                Optional mapping layer for supported JSON CDM fields. Unsupported formats are still retained for status feedback.
+              </p>
+              <div className="mt-3 field-chip">Loaded CDM: {cdmName || "none"}</div>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-[24px] border border-slate-900/10 bg-white/55 p-4">
+            <label className="inline-flex items-center gap-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={usePreset}
+                onChange={(e) => setUsePreset(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-slate-900"
+              />
+              Use a curated preset instead of a custom upload
             </label>
+            {usePreset && (
+              <div className="mt-4">
+                <label className="field-label">Preset</label>
+                <select
+                  className="field-select"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                >
+                  {Object.keys(PRESETS).map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="section-card section-pad">
+          <span className="section-kicker">Validation</span>
+          <h2 className="section-heading">Readiness panel</h2>
+          <p className="section-copy">
+            Resolve structural and covariance issues before the case is committed to the local evidence workspace.
+          </p>
+
+          <div className="mt-8 grid gap-3">
+            <div className="meta-card">
+              <div className="meta-card-label">Schema completeness</div>
+              <div className="meta-card-value">{validationOk ? "Passed" : "Pending"}</div>
+            </div>
+            <div className="meta-card">
+              <div className="meta-card-label">Covariance symmetry and PSD</div>
+              <div className="meta-card-value">{validationOk ? "Passed" : "Pending"}</div>
+            </div>
+            <div className="meta-card">
+              <div className="meta-card-label">Unit sanity bounds</div>
+              <div className="meta-card-value">{validationOk ? "Passed" : "Pending"}</div>
+            </div>
+          </div>
+
+          {validationErrors.length > 0 && (
+            <div className="status-banner mt-6" style={{ borderColor: "rgba(196, 70, 70, 0.18)", background: "rgba(255, 124, 124, 0.08)" }}>
+              <strong>Validation errors</strong>
+              {validationErrors.map((err) => (
+                <p key={err}>{err}</p>
+              ))}
+            </div>
           )}
-        </div>
-        <button
-          onClick={onRunStress}
-          disabled={!baselineDone}
-          className="mt-3 rounded bg-amber-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          Run Stress Test
-        </button>
-      </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-gray-900">Results</h2>
-        <button
-          onClick={() => caseId && navigate(`/cases/${caseId}/compare`)}
-          disabled={!stressDone || !caseId}
-          className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          Open Baseline vs Stress Compare
-        </button>
-      </section>
-
-      <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700">
-        <div><span className="font-semibold">Case ID:</span> {caseId || "not created"}</div>
-        <div><span className="font-semibold">Status:</span> {status || "idle"}</div>
+          <div className="action-row mt-6">
+            <button onClick={onValidate} className="action-button action-button-primary">
+              Validate snapshot
+            </button>
+          </div>
+        </section>
       </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="section-card section-pad">
+          <span className="section-kicker">Control Run</span>
+          <h2 className="section-heading">Baseline execution</h2>
+          <p className="section-copy">
+            Create the case record, preserve the nominal run, and lock the reference trace before applying any stressors.
+          </p>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="meta-card">
+              <div className="meta-card-label">Case identifier</div>
+              <div className="meta-card-value">{caseId || "Not created"}</div>
+            </div>
+            <div className="meta-card">
+              <div className="meta-card-label">Baseline status</div>
+              <div className="meta-card-value">{baselineDone ? "Complete" : caseId ? "Ready to run" : "Waiting for case"}</div>
+            </div>
+          </div>
+
+          <div className="action-row mt-8">
+            <button
+              onClick={onCreateCase}
+              disabled={!validationOk}
+              className="action-button action-button-primary"
+            >
+              Create case
+            </button>
+            <button
+              onClick={onRunBaseline}
+              disabled={!caseId}
+              className="action-button action-button-secondary"
+            >
+              Run baseline
+            </button>
+          </div>
+        </section>
+
+        <section className="section-card section-pad">
+          <span className="section-kicker">Stress Model</span>
+          <h2 className="section-heading">Degrade the sensing picture</h2>
+          <p className="section-copy">
+            Dial cadence, outages, process noise, and maneuver uncertainty until the decision envelope starts to deform.
+          </p>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="field-label">Measurement cadence seconds</label>
+              <input
+                type="number"
+                className="field-input"
+                value={measurementCadenceSeconds}
+                onChange={(e) => setMeasurementCadenceSeconds(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="field-label">Outage start hours</label>
+              <input
+                type="number"
+                className="field-input"
+                value={outageStartH}
+                onChange={(e) => setOutageStartH(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="field-label">Outage duration hours</label>
+              <input
+                type="number"
+                className="field-input"
+                value={outageDurationH}
+                onChange={(e) => setOutageDurationH(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="field-label">Process noise scale</label>
+              <input
+                type="number"
+                step="0.1"
+                className="field-input"
+                value={processNoiseScale}
+                onChange={(e) => setProcessNoiseScale(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[24px] border border-slate-900/10 bg-white/55 p-4">
+            <label className="inline-flex items-center gap-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={maneuverEnabled}
+                onChange={(e) => setManeuverEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-slate-900"
+              />
+              Enable maneuver uncertainty
+            </label>
+            {maneuverEnabled && (
+              <div className="mt-4">
+                <label className="field-label">Delta-v sigma m/s</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="field-input"
+                  value={deltaVSigmaMps}
+                  onChange={(e) => setDeltaVSigmaMps(Number(e.target.value))}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="action-row mt-8">
+            <button
+              onClick={onRunStress}
+              disabled={!baselineDone}
+              className="action-button action-button-accent"
+            >
+              Run stress test
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <section className="section-card section-pad">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+          <div>
+            <span className="section-kicker">Result Access</span>
+            <h2 className="section-heading">Open the comparison view</h2>
+            <p className="section-copy">
+              Once both runs complete, move directly into the compare dashboard for overlays, deltas, the one-pager, and the export pack.
+            </p>
+            <div className="action-row mt-8">
+              <button
+                onClick={() => caseId && navigate(`/cases/${caseId}/compare`)}
+                disabled={!stressDone || !caseId}
+                className="action-button action-button-dark"
+              >
+                Open baseline vs stress compare
+              </button>
+            </div>
+          </div>
+
+          <div className="status-banner">
+            <strong>Workspace status</strong>
+            <p>Case ID: {caseId || "not created"}</p>
+            <p>Status: {status || "idle"}</p>
+            <p>Snapshot source: {usePreset ? `preset: ${presetName}` : snapshotName}</p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

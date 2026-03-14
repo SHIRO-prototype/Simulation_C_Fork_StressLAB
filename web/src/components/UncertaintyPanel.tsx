@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotColors, plotConfig } from "../lib/chartTheme";
 
 interface UncertaintyPanelProps {
   columns: string[];
@@ -73,7 +74,7 @@ export default function UncertaintyPanel({ columns, rows, summary }: Uncertainty
       type: "scatter",
       mode: "lines",
       name: "Cov Trace (obj1)",
-      line: { color: "#a855f7", width: 2 },
+      line: { color: plotColors.plum, width: 2.4 },
       yaxis: "y",
     },
   ];
@@ -85,37 +86,41 @@ export default function UncertaintyPanel({ columns, rows, summary }: Uncertainty
       type: "scatter",
       mode: "lines",
       name: "Growth Rate",
-      line: { color: "#06b6d4", width: 1.5, dash: "dot" },
+      line: { color: plotColors.mint, width: 1.8, dash: "dot" },
       yaxis: "y2",
     });
   }
 
   return (
-    <Plot
-      data={traces}
-      layout={{
-        title: { text: "Panel C: Covariance Uncertainty" },
-        height: 300,
-        xaxis: {
-          title: { text: xLabel },
-          autorange: hasTCA ? "reversed" : true,
-        },
-        yaxis: {
-          title: { text: "Cov Trace (km\u00B2)" },
-          type: "log",
-          side: "left",
-        },
-        yaxis2: {
-          title: { text: "Growth Rate (km\u00B2/s)" },
-          overlaying: "y",
-          side: "right",
-        },
-        shapes: shapes as Plotly.Layout["shapes"],
-        legend: { orientation: "h", y: -0.25 },
-        margin: { t: 40, b: 55, l: 65, r: 65 },
-      }}
-      useResizeHandler
-      style={{ width: "100%", height: "300px" }}
-    />
+    <div className="plot-shell">
+      <Plot
+        data={traces}
+        layout={createPlotLayout({
+          title: "Covariance spread and growth pressure",
+          height: 320,
+          xAxis: {
+            title: xLabel,
+            autorange: hasTCA ? "reversed" : true,
+          },
+          yAxis: {
+            title: "Cov Trace (km\u00B2)",
+            type: "log",
+            side: "left",
+          },
+          yAxis2: {
+            title: "Growth Rate (km\u00B2/s)",
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+          },
+          shapes: shapes as Plotly.Layout["shapes"],
+          legend: { y: -0.24 },
+          margin: { r: 72 },
+        })}
+        config={plotConfig}
+        useResizeHandler
+        style={{ width: "100%", height: "320px" }}
+      />
+    </div>
   );
 }

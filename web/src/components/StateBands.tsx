@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotConfig } from "../lib/chartTheme";
 
 interface StateBandsProps {
   columns: string[];
@@ -134,36 +135,39 @@ export default function StateBands({ columns, rows }: StateBandsProps) {
   ];
 
   return (
-    <Plot
-      data={legendTraces}
-      layout={{
-        title: { text: "Decision State Bands" },
-        height: 180,
-        xaxis: {
-          title: { text: xLabel },
-          autorange: hasTCA ? "reversed" : true,
-        },
-        yaxis: {
-          title: { text: "Threshold v1" },
-          range: [-0.05, 1.05],
-          showticklabels: false,
-          showgrid: false,
-          domain: [0.55, 1],
-        },
-        yaxis2: {
-          title: { text: "Integrity v1" },
-          range: [-0.05, 1.05],
-          showticklabels: false,
-          showgrid: false,
-          anchor: "x",
-          domain: [0, 0.45],
-        },
-        shapes: shapes as Plotly.Layout["shapes"],
-        legend: { orientation: "h", y: -0.45 },
-        margin: { t: 35, b: 65, l: 65, r: 20 },
-      }}
-      useResizeHandler
-      style={{ width: "100%", height: "180px" }}
-    />
+    <div className="plot-shell">
+      <Plot
+        data={legendTraces}
+        layout={createPlotLayout({
+          title: "Decision state bands",
+          height: 220,
+          xAxis: {
+            title: xLabel,
+            autorange: hasTCA ? "reversed" : true,
+          },
+          yAxis: {
+            title: "Threshold v1",
+            range: [-0.05, 1.05],
+            showticklabels: false,
+            showgrid: false,
+            domain: [0.56, 1],
+          },
+          yAxis2: {
+            title: "Integrity v1",
+            range: [-0.05, 1.05],
+            showticklabels: false,
+            showgrid: false,
+            anchor: "x",
+            domain: [0, 0.42],
+          },
+          shapes: shapes as Plotly.Layout["shapes"],
+          legend: { y: -0.42 },
+          margin: { b: 86 },
+        })}
+        config={plotConfig}
+        useResizeHandler
+        style={{ width: "100%", height: "220px" }}
+      />
+    </div>
   );
 }

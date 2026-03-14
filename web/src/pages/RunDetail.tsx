@@ -107,8 +107,8 @@ export default function RunDetail() {
   /* ---- Loading state ---- */
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-gray-500 text-lg">Loading run {runId}...</p>
+      <div className="section-card section-pad flex min-h-[60vh] items-center justify-center">
+        <p className="text-lg text-slate-500">Loading run {runId}...</p>
       </div>
     );
   }
@@ -116,14 +116,14 @@ export default function RunDetail() {
   /* ---- Error state ---- */
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-red-600 text-lg font-medium">
+      <div className="section-card section-pad flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <p className="text-lg font-medium text-red-600">
           Failed to load run data
         </p>
-        <p className="text-gray-500 text-sm">{error}</p>
+        <p className="text-sm text-slate-500">{error}</p>
         <button
           onClick={() => navigate("/")}
-          className="mt-2 rounded bg-gray-200 px-4 py-2 text-sm hover:bg-gray-300"
+          className="action-button action-button-secondary mt-2"
         >
           Back to runs
         </button>
@@ -133,39 +133,36 @@ export default function RunDetail() {
 
   /* ---- Shorthand access to summary fields ---- */
   const s = summary ?? {};
+  const sanity = s.sanity as Record<string, boolean> | undefined;
 
   return (
     <div className="space-y-8">
       {/* ---- Back button + title row ---- */}
-      <div className="flex items-center gap-4">
+      <div className="section-card section-pad flex flex-wrap items-center gap-4">
         <button
           onClick={() => navigate("/")}
-          className="rounded bg-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-300"
+          className="action-button action-button-secondary"
         >
           &larr; Back
         </button>
-        <h1 className="text-xl font-bold text-gray-900 truncate">
+        <h1 className="section-heading truncate" style={{ fontSize: "2rem" }}>
           Run: {runId}
         </h1>
       </div>
 
       {/* ---- Sanity badges ---- */}
-      {s.sanity && (
-        <div className="flex flex-wrap gap-2">
+      {sanity && (
+        <div className="flex flex-wrap gap-3">
           {[
-            { key: "degradation_active", label: "Degradation Active", ok: (s.sanity as Record<string,boolean>).degradation_active },
-            { key: "pc_diverged", label: "Pc Diverged", ok: (s.sanity as Record<string,boolean>).pc_diverged },
-            { key: "staleness_ramped", label: "Staleness Ramped", ok: (s.sanity as Record<string,boolean>).staleness_ramped },
+            { key: "degradation_active", label: "Degradation Active", ok: sanity.degradation_active },
+            { key: "pc_diverged", label: "Pc Diverged", ok: sanity.pc_diverged },
+            { key: "staleness_ramped", label: "Staleness Ramped", ok: sanity.staleness_ramped },
           ].map((f) => (
             <span
               key={f.key}
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
-                f.ok
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-500"
-              }`}
+              className={f.ok ? "status-pill status-pill-ok" : "status-pill status-pill-warn"}
             >
-              {f.ok ? "\u2713" : "\u2717"} {f.label}
+              {f.label}
             </span>
           ))}
         </div>
@@ -277,7 +274,7 @@ export default function RunDetail() {
           <Link
             to={`/runs/${runId}/onepager`}
             target="_blank"
-            className="inline-flex items-center rounded bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+            className="action-button action-button-dark"
           >
             Open One-Pager
           </Link>
@@ -289,21 +286,21 @@ export default function RunDetail() {
                 w.onload = () => setTimeout(() => w.print(), 800);
               }
             }}
-            className="inline-flex items-center rounded bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            className="action-button action-button-secondary"
           >
             Print to PDF
           </button>
           <a
             href={runDownloadUrl(runId, `summary_${runId}.json`)}
             download
-            className="inline-flex items-center rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="action-button action-button-accent"
           >
             Download Summary JSON
           </a>
           <a
             href={runDownloadUrl(runId, `timeseries_${runId}.parquet`)}
             download
-            className="inline-flex items-center rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="action-button action-button-accent"
           >
             Download Timeseries Parquet
           </a>

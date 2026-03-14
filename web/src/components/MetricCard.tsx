@@ -17,34 +17,21 @@ export default function MetricCard({
 }: MetricCardProps) {
   const displayValue = value != null ? String(value) : "---";
 
-  const statusColors: Record<string, string> = {
-    ok: "border-l-4 border-green-500",
-    warn: "border-l-4 border-yellow-500",
-    critical: "border-l-4 border-red-500",
-  };
-  const borderClass = status && statusColors[status]
-    ? statusColors[status]
+  const toneClass = status
+    ? `metric-card-${status}`
     : highlight
-    ? "border-l-4 border-blue-600"
-    : "";
+      ? "metric-card-highlight"
+      : "";
 
   return (
-    <div
-      className={[
-        "rounded-lg bg-white shadow p-4 overflow-hidden",
-        borderClass,
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide truncate">
+    <div className={["metric-card", toneClass, className].filter(Boolean).join(" ")}>
+      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-xl font-semibold text-gray-900 truncate" title={displayValue}>
+      <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-900" title={displayValue}>
         {displayValue}
         {value != null && unit && (
-          <span className="ml-1 text-sm font-normal text-gray-500">
+          <span className="ml-2 text-sm font-medium text-slate-500">
             {unit}
           </span>
         )}

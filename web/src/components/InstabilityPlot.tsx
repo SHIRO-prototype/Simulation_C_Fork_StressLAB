@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotColors, plotConfig } from "../lib/chartTheme";
 
 interface InstabilityPlotProps {
   columns: string[];
@@ -84,58 +85,59 @@ export default function InstabilityPlot({
   }
 
   return (
-    <Plot
-      data={[
-        {
-          x: xAxis,
-          y: thresholdOrdinal,
-          type: "scatter",
-          mode: "lines",
-          name: "Threshold v1 Alert State",
-          line: { shape: "hv", color: "#8b5cf6", width: 2 },
-          yaxis: "y",
-        },
-        {
-          x: xAxis,
-          y: integrityOrdinal,
-          type: "scatter",
-          mode: "lines",
-          name: "Integrity v1 State",
-          line: { shape: "hv", color: "#06b6d4", width: 2 },
-          yaxis: "y2",
-        },
-      ]}
-      layout={{
-        title: { text: "Decision State Timeline" },
-        height: 320,
-        xaxis: {
-          title: { text: xLabel },
-          autorange: hasTimeTCA ? "reversed" : true,
-        },
-        yaxis: {
-          title: { text: "Threshold v1" },
-          tickvals: [0, 1],
-          ticktext: THRESHOLD_LABELS,
-          range: [-0.2, 1.4],
-          side: "left",
-        },
-        yaxis2: {
-          title: { text: "Integrity v1" },
-          tickvals: [0, 1, 2, 3],
-          ticktext: INTEGRITY_LABELS,
-          overlaying: "y",
-          side: "right",
-          range: [-0.3, 3.5],
-        },
-        annotations: annotations as Plotly.Layout["annotations"],
-        legend: {
-          orientation: "h",
-          y: -0.25,
-        },
-        margin: { t: 40, b: 60, l: 80, r: 80 },
-      }}
-      useResizeHandler
-      style={{ width: "100%", height: "320px" }}
-    />
+    <div className="plot-shell">
+      <Plot
+        data={[
+          {
+            x: xAxis,
+            y: thresholdOrdinal,
+            type: "scatter",
+            mode: "lines",
+            name: "Threshold v1 Alert State",
+            line: { shape: "hv", color: plotColors.plum, width: 2.2 },
+            yaxis: "y",
+          },
+          {
+            x: xAxis,
+            y: integrityOrdinal,
+            type: "scatter",
+            mode: "lines",
+            name: "Integrity v1 State",
+            line: { shape: "hv", color: plotColors.baseline, width: 2.2 },
+            yaxis: "y2",
+          },
+        ]}
+        layout={createPlotLayout({
+          title: "Decision state timeline",
+          height: 336,
+          xAxis: {
+            title: xLabel,
+            autorange: hasTimeTCA ? "reversed" : true,
+          },
+          yAxis: {
+            title: "Threshold v1",
+            tickvals: [0, 1],
+            ticktext: THRESHOLD_LABELS,
+            range: [-0.2, 1.4],
+            side: "left",
+          },
+          yAxis2: {
+            title: "Integrity v1",
+            tickvals: [0, 1, 2, 3],
+            ticktext: INTEGRITY_LABELS,
+            overlaying: "y",
+            side: "right",
+            range: [-0.3, 3.5],
+            showgrid: false,
+          },
+          annotations: annotations as Plotly.Layout["annotations"],
+          legend: { y: -0.24 },
+          margin: { l: 82, r: 82 },
+        })}
+        config={plotConfig}
+        useResizeHandler
+        style={{ width: "100%", height: "336px" }}
+      />
+    </div>
   );
 }

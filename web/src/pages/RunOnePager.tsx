@@ -163,6 +163,7 @@ export default function RunOnePager() {
   }
 
   const s = summary ?? {};
+  const sanity = s.sanity as Record<string, boolean> | undefined;
   const label = typeof s.run_label === "string" ? s.run_label : null;
   const title = typeof s.scenario_title === "string" ? s.scenario_title : null;
   const purpose = typeof s.scenario_purpose === "string" ? s.scenario_purpose : null;
@@ -258,12 +259,12 @@ export default function RunOnePager() {
         </div>
 
         {/* ==== SANITY FLAGS ==== */}
-        {s.sanity && (
+        {sanity && (
           <div className="flex flex-wrap gap-2">
             {[
-              { key: "degradation_active", label: "Degradation Active", ok: (s.sanity as Record<string, boolean>).degradation_active },
-              { key: "pc_diverged", label: "Pc Diverged", ok: (s.sanity as Record<string, boolean>).pc_diverged },
-              { key: "staleness_ramped", label: "Staleness Ramped", ok: (s.sanity as Record<string, boolean>).staleness_ramped },
+              { key: "degradation_active", label: "Degradation Active", ok: sanity.degradation_active },
+              { key: "pc_diverged", label: "Pc Diverged", ok: sanity.pc_diverged },
+              { key: "staleness_ramped", label: "Staleness Ramped", ok: sanity.staleness_ramped },
             ].map((f) => (
               <span
                 key={f.key}

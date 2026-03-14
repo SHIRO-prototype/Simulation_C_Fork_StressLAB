@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Plot from "react-plotly.js";
+import { createPlotLayout, plotConfig } from "../lib/chartTheme";
 
 interface PcDriftPlotProps {
   columns: string[];
@@ -55,8 +56,8 @@ export default function PcDriftPlot({ columns, rows, summary }: PcDriftPlotProps
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
-        <label style={{ fontSize: "0.75rem", color: "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+      <div className="mb-2 flex justify-end">
+        <label className="field-chip cursor-pointer text-xs">
           <input
             type="checkbox"
             checked={logScale}
@@ -65,41 +66,49 @@ export default function PcDriftPlot({ columns, rows, summary }: PcDriftPlotProps
           Log Y-axis
         </label>
       </div>
-      <Plot
-        data={[
-          {
-            x: staleness,
-            y: pcDrift,
-            type: "scatter",
-            mode: "markers",
-            marker: {
-              color: colorValues as number[],
-              colorscale: "Viridis",
-              colorbar: {
-                title: { text: colorLabel },
+      <div className="plot-shell">
+        <Plot
+          data={[
+            {
+              x: staleness,
+              y: pcDrift,
+              type: "scatter",
+              mode: "markers",
+              marker: {
+                color: colorValues as number[],
+                colorscale: [
+                  [0, "#4cc6d8"],
+                  [0.5, "#f5b85c"],
+                  [1, "#dc7c4c"],
+                ],
+                colorbar: {
+                  title: { text: colorLabel },
+                },
+                size: 6,
+                opacity: 0.78,
+                line: { color: "rgba(8, 21, 33, 0.35)", width: 1 },
               },
-              size: 5,
-              opacity: 0.7,
+              name: "Pc Drift",
             },
-            name: "Pc Drift",
-          },
-        ]}
-        layout={{
-          title: { text: "Pc Drift vs Staleness" },
-          height: 400,
-          xaxis: {
-            title: { text: "Staleness (obj1)" },
-          },
-          yaxis: {
-            title: { text: "Pc Drift" },
-            type: logScale ? "log" : "linear",
-          },
-          annotations: annotations as Plotly.Layout["annotations"],
-          margin: { t: 40, b: 60, l: 60, r: 60 },
-        }}
-        useResizeHandler
-        style={{ width: "100%", height: "400px" }}
-      />
+          ]}
+          layout={createPlotLayout({
+            title: "Pc drift versus staleness",
+            height: 400,
+            xAxis: {
+              title: "Staleness (obj1)",
+            },
+            yAxis: {
+              title: "Pc Drift",
+              type: logScale ? "log" : "linear",
+            },
+            annotations: annotations as Plotly.Layout["annotations"],
+            margin: { r: 72 },
+          })}
+          config={plotConfig}
+          useResizeHandler
+          style={{ width: "100%", height: "400px" }}
+        />
+      </div>
     </div>
   );
 }
